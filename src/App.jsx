@@ -1,122 +1,77 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { Component } from 'react';
+import { useUIStore } from './stores/uiStore';
+import { Header } from './components/Header';
+import { GanttView } from './components/Gantt/GanttView';
+import { DashboardView } from './components/Dashboard/DashboardView';
+import { NetworkView } from './components/Network/NetworkView';
+import { ScurveView } from './components/Scurve/ScurveView';
+import { ResourcesView } from './components/Resources/ResourcesView';
+import { CalendarView } from './components/Calendar/CalendarView';
 
-function App() {
-  const [count, setCount] = useState(0)
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('UI Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white p-8">
+          <i className="fa-solid fa-triangle-exclamation text-6xl text-rose-500 mb-6"></i>
+          <h1 className="text-3xl font-black text-rose-400 mb-4">Error Inesperado</h1>
+          <p className="text-slate-400 mb-6 text-center max-w-lg">
+            El sistema ha detenido el renderizado para proteger tus datos.
           </p>
+          <pre className="text-xs text-rose-200 bg-black p-4 rounded max-w-2xl overflow-auto mb-4">
+            {this.state.error?.toString()}
+          </pre>
+          <button
+            onClick={() => {
+              localStorage.clear();
+              window.location.reload();
+            }}
+            className="bg-rose-600 hover:bg-rose-500 px-6 py-3 rounded font-bold shadow-lg transition-colors"
+          >
+            Restaurar de Fábrica y Recargar
+          </button>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      );
+    }
+    return this.props.children;
+  }
 }
 
-export default App
+function MainContent() {
+  const activeTab = useUIStore((state) => state.activeTab);
+
+  return (
+    <main className="flex-1 overflow-hidden relative w-full h-full">
+      {activeTab === 'gantt' && <GanttView />}
+      {activeTab === 'dashboard' && <DashboardView />}
+      {activeTab === 'network' && <NetworkView />}
+      {activeTab === 'scurve' && <ScurveView />}
+      {activeTab === 'resources' && <ResourcesView />}
+      {activeTab === 'calendar' && <CalendarView />}
+    </main>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <div className="flex flex-col h-screen w-screen bg-[#0f172a] text-sm overflow-hidden font-sans">
+        <Header />
+        <MainContent />
+      </div>
+    </ErrorBoundary>
+  );
+}
