@@ -22,7 +22,7 @@ export const Header = () => {
     resetProject,
   } = useProjectStore();
 
-  const { activeTab, setActiveTab } = useUIStore();
+  const { activeTab, setActiveTab, setProjectsDrawerOpen } = useUIStore();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -95,9 +95,13 @@ export const Header = () => {
     <header className="bg-[#0f172a] border-b border-slate-700/80 px-3 py-1.5 flex flex-wrap items-center justify-between shadow-sm z-30 shrink-0 gap-2 select-none">
       {/* 1. SECCIÓN IZQUIERDA: Marca & Identidad del Proyecto */}
       <div className="flex items-center gap-2.5">
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-2 rounded-md shadow-md flex items-center justify-center">
-          <i className="fa-solid fa-layer-group text-sm"></i>
-        </div>
+        <button
+          onClick={() => setProjectsDrawerOpen(true)}
+          title="Abrir Gestor de Proyectos (Favoritos y Recientes)"
+          className="bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white p-2 rounded-md shadow-md flex items-center justify-center transition-all active:scale-95 cursor-pointer group"
+        >
+          <i className="fa-solid fa-folder-tree text-sm group-hover:scale-110 transition-transform"></i>
+        </button>
 
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
@@ -112,18 +116,24 @@ export const Header = () => {
                 className="bg-slate-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs font-bold text-white outline-none w-48 shadow-inner"
               />
             ) : (
-              <div
-                onClick={() => setIsEditingTitle(true)}
-                title="Haz clic para renombrar el proyecto"
-                className="flex items-center gap-1.5 cursor-pointer group"
-              >
-                <span className="text-xs font-black text-white group-hover:text-blue-300 transition-colors">
-                  {projectName || 'Project Master'}
+              <div className="flex items-center gap-1.5">
+                <span
+                  onClick={() => setIsEditingTitle(true)}
+                  title="Haz clic para renombrar el proyecto"
+                  className="text-xs font-black text-white hover:text-blue-300 transition-colors cursor-pointer"
+                >
+                  {projectName || 'Nuevo Proyecto'}
                 </span>
                 <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 text-[9px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider">
                   Enterprise
                 </span>
-                <i className="fa-solid fa-pen text-[9px] text-slate-500 group-hover:text-slate-300 transition-colors"></i>
+                <button
+                  onClick={() => setProjectsDrawerOpen(true)}
+                  title="Ver Proyectos Guardados"
+                  className="text-slate-500 hover:text-amber-400 text-[10px] p-0.5 cursor-pointer transition-colors"
+                >
+                  <i className="fa-solid fa-angle-down"></i>
+                </button>
               </div>
             )}
           </div>

@@ -8,6 +8,7 @@ import { NetworkView } from './components/Network/NetworkView';
 import { ScurveView } from './components/Scurve/ScurveView';
 import { ResourcesView } from './components/Resources/ResourcesView';
 import { CalendarView } from './components/Calendar/CalendarView';
+import { ProjectsSidebar } from './components/Modals/ProjectsSidebar';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -109,6 +110,7 @@ export default function App() {
       <div className="flex flex-col h-screen w-screen bg-[#0f172a] text-sm overflow-hidden font-sans">
         <Header />
         <MainContent />
+        <ProjectsSidebar />
       </div>
     </ErrorBoundary>
   );

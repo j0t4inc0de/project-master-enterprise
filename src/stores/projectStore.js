@@ -3,30 +3,50 @@ import { INIT_TASKS, INIT_RESOURCES, INIT_HOLIDAYS, INIT_WORKING_DAYS } from '..
 import { computeProjectCPM } from '../lib/cpmEngine.js';
 
 const STORAGE_KEY = 'pme_project_v1';
+const SAVED_PROJECTS_KEY = 'pme_saved_projects_v1';
 const MAX_HISTORY = 20;
 
-const createSnapshot = (state) => {
-  const clone = (data) => {
-    if (typeof structuredClone === 'function') {
-      try {
-        return structuredClone(data);
-      } catch {
-        // fallback
-      }
+const clone = (data) => {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(data);
+    } catch {
+      // fallback
     }
-    return JSON.parse(JSON.stringify(data));
-  };
+  }
+  return JSON.parse(JSON.stringify(data));
+};
 
-  return {
-    projectName: state.projectName,
-    tasks: clone(state.tasks),
-    resources: clone(state.resources),
-    holidays: clone(state.holidays),
-    startDate: state.startDate,
-    statusDate: state.statusDate,
-    workingDays: clone(state.workingDays),
-    autoProgress: state.autoProgress ?? false,
-  };
+const createSnapshot = (state) => ({
+  projectName: state.projectName,
+  tasks: clone(state.tasks),
+  resources: clone(state.resources),
+  holidays: clone(state.holidays),
+  startDate: state.startDate,
+  statusDate: state.statusDate,
+  workingDays: clone(state.workingDays),
+  autoProgress: state.autoProgress ?? false,
+});
+
+const loadSavedProjectsList = () => {
+  try {
+    const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Error al cargar lista de proyectos:', e);
+  }
+  return [];
+};
+
+const saveProjectsListToStorage = (list) => {
+  try {
+    localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Error al guardar lista de proyectos:', e);
+  }
 };
 
 const getInitialState = () => {
@@ -72,6 +92,9 @@ export const useProjectStore = create((set, get) => ({
   workingDays: initial.workingDays,
   autoProgress: false,
 
+  // Lista de proyectos guardados (Favoritos & Recientes)
+  savedProjects: loadSavedProjectsList(),
+
   // Historial de Undo / Redo
   past: [],
   future: [],
@@ -115,6 +138,59 @@ export const useProjectStore = create((set, get) => ({
       autoProgress: current.autoProgress,
     });
 
+    // Actualizar lista de proyectos recientes/guardados
+    const savedList = loadSavedProjectsList();
+    const currentName = current.projectName || 'Nuevo Proyecto';
+    const now = new Date().toISOString();
+    const taskCount = (current.tasks || []).length;
+    const totalCost = cpmResult?.pSum?.cost || 0;
+
+    let updatedList;
+    const existingIdx = savedList.findIndex((p) => p.name.trim().toLowerCase() === currentName.trim().toLowerCase());
+    if (existingIdx >= 0) {
+      const isFav = savedList[existingIdx].isFavorite || false;
+      savedList[existingIdx] = {
+        ...savedList[existingIdx],
+        name: currentName,
+        isFavorite: isFav,
+        updatedAt: now,
+        taskCount,
+        totalCost,
+        data: {
+          projectName: currentName,
+          tasks: clone(current.tasks),
+          resources: clone(current.resources),
+          holidays: clone(current.holidays),
+          startDate: current.startDate,
+          statusDate: current.statusDate,
+          workingDays: clone(current.workingDays),
+        },
+      };
+      updatedList = [...savedList];
+    } else if (taskCount > 0) {
+      const newEntry = {
+        id: `p_${Date.now()}`,
+        name: currentName,
+        isFavorite: false,
+        updatedAt: now,
+        taskCount,
+        totalCost,
+        data: {
+          projectName: currentName,
+          tasks: clone(current.tasks),
+          resources: clone(current.resources),
+          holidays: clone(current.holidays),
+          startDate: current.startDate,
+          statusDate: current.statusDate,
+          workingDays: clone(current.workingDays),
+        },
+      };
+      updatedList = [newEntry, ...savedList].slice(0, 15);
+    } else {
+      updatedList = savedList;
+    }
+    saveProjectsListToStorage(updatedList);
+
     set({
       ...updates,
       cpmResult,
@@ -122,9 +198,10 @@ export const useProjectStore = create((set, get) => ({
       future,
       canUndo: past.length > 0,
       canRedo: future.length > 0,
+      savedProjects: updatedList,
     });
 
-    // Guardado automático local
+    // Guardar en localStorage
     try {
       localStorage.setItem(
         STORAGE_KEY,
@@ -139,19 +216,19 @@ export const useProjectStore = create((set, get) => ({
         })
       );
     } catch (e) {
-      console.warn('Error al guardar en localStorage:', e);
+      console.error('Error al guardar en localStorage:', e);
     }
   },
 
   // Acciones de Undo / Redo
   undo: () => {
-    const state = get();
-    if (!state.past || state.past.length === 0) return;
+    const { past, future } = get();
+    if (!past || past.length === 0) return;
 
-    const currentSnapshot = createSnapshot(state);
-    const newPast = [...state.past];
-    const previousSnapshot = newPast.pop();
-    const newFuture = [currentSnapshot, ...(state.future || [])].slice(0, MAX_HISTORY);
+    const previousSnapshot = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+    const currentSnapshot = createSnapshot(get());
+    const newFuture = [currentSnapshot, ...future].slice(0, MAX_HISTORY);
 
     const cpmResult = computeProjectCPM({
       tasks: previousSnapshot.tasks,
@@ -164,40 +241,30 @@ export const useProjectStore = create((set, get) => ({
     });
 
     set({
-      ...previousSnapshot,
+      projectName: previousSnapshot.projectName,
+      tasks: previousSnapshot.tasks,
+      resources: previousSnapshot.resources,
+      holidays: previousSnapshot.holidays,
+      startDate: previousSnapshot.startDate,
+      statusDate: previousSnapshot.statusDate,
+      workingDays: previousSnapshot.workingDays,
+      autoProgress: previousSnapshot.autoProgress,
       cpmResult,
       past: newPast,
       future: newFuture,
       canUndo: newPast.length > 0,
-      canRedo: newFuture.length > 0,
+      canRedo: true,
     });
-
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          projectName: previousSnapshot.projectName,
-          tasks: previousSnapshot.tasks,
-          resources: previousSnapshot.resources,
-          holidays: previousSnapshot.holidays,
-          startDate: previousSnapshot.startDate,
-          statusDate: previousSnapshot.statusDate,
-          workingDays: previousSnapshot.workingDays,
-        })
-      );
-    } catch (e) {
-      console.warn('Error al guardar en localStorage:', e);
-    }
   },
 
   redo: () => {
-    const state = get();
-    if (!state.future || state.future.length === 0) return;
+    const { past, future } = get();
+    if (!future || future.length === 0) return;
 
-    const currentSnapshot = createSnapshot(state);
-    const newFuture = [...state.future];
-    const nextSnapshot = newFuture.shift();
-    const newPast = [...(state.past || []), currentSnapshot].slice(-MAX_HISTORY);
+    const nextSnapshot = future[0];
+    const newFuture = future.slice(1);
+    const currentSnapshot = createSnapshot(get());
+    const newPast = [...past, currentSnapshot].slice(-MAX_HISTORY);
 
     const cpmResult = computeProjectCPM({
       tasks: nextSnapshot.tasks,
@@ -210,32 +277,70 @@ export const useProjectStore = create((set, get) => ({
     });
 
     set({
-      ...nextSnapshot,
+      projectName: nextSnapshot.projectName,
+      tasks: nextSnapshot.tasks,
+      resources: nextSnapshot.resources,
+      holidays: nextSnapshot.holidays,
+      startDate: nextSnapshot.startDate,
+      statusDate: nextSnapshot.statusDate,
+      workingDays: nextSnapshot.workingDays,
+      autoProgress: nextSnapshot.autoProgress,
       cpmResult,
       past: newPast,
       future: newFuture,
-      canUndo: newPast.length > 0,
+      canUndo: true,
       canRedo: newFuture.length > 0,
     });
+  },
 
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          projectName: nextSnapshot.projectName,
-          tasks: nextSnapshot.tasks,
-          resources: nextSnapshot.resources,
-          holidays: nextSnapshot.holidays,
-          startDate: nextSnapshot.startDate,
-          statusDate: nextSnapshot.statusDate,
-          workingDays: nextSnapshot.workingDays,
-        })
-      );
-    } catch (e) {
-      console.warn('Error al guardar en localStorage:', e);
+  // Gestión de Favoritos & Proyectos Guardados
+  toggleFavoriteProject: (id) => {
+    const list = loadSavedProjectsList();
+    const updated = list.map((p) => (p.id === id ? { ...p, isFavorite: !p.isFavorite } : p));
+    saveProjectsListToStorage(updated);
+    set({ savedProjects: updated });
+  },
+
+  toggleCurrentFavorite: () => {
+    const { projectName } = get();
+    const list = loadSavedProjectsList();
+    const existing = list.find((p) => p.name.trim().toLowerCase() === projectName.trim().toLowerCase());
+    if (existing) {
+      get().toggleFavoriteProject(existing.id);
     }
   },
 
+  deleteSavedProject: (id) => {
+    const list = loadSavedProjectsList();
+    const updated = list.filter((p) => p.id !== id);
+    saveProjectsListToStorage(updated);
+    set({ savedProjects: updated });
+  },
+
+  loadSavedProject: (id) => {
+    const list = loadSavedProjectsList();
+    const target = list.find((p) => p.id === id);
+    if (target && target.data) {
+      get().recalc(
+        {
+          projectName: target.data.projectName || target.name,
+          tasks: clone(target.data.tasks || []),
+          resources: clone(target.data.resources || []),
+          holidays: clone(target.data.holidays || []),
+          startDate: target.data.startDate || new Date().toISOString().split('T')[0],
+          statusDate: target.data.statusDate || target.data.startDate,
+          workingDays: clone(target.data.workingDays || INIT_WORKING_DAYS),
+          past: [],
+          future: [],
+          canUndo: false,
+          canRedo: false,
+        },
+        false
+      );
+    }
+  },
+
+  // Setters básicos
   setProjectName: (projectName) => get().recalc({ projectName }),
   setStartDate: (startDate) => get().recalc({ startDate }),
   setStatusDate: (statusDate) => get().recalc({ statusDate }),
@@ -247,7 +352,7 @@ export const useProjectStore = create((set, get) => ({
 
   updateTask: (id, field, value) => {
     const parsedVal = ['duration', 'startDelay', 'finishDelay'].includes(field)
-      ? isNaN(parseInt(value))
+      ? value === ''
         ? ''
         : Math.max(0, parseInt(value))
       : field === 'cost' || field === 'progress'
@@ -414,12 +519,12 @@ export const useProjectStore = create((set, get) => ({
     get().recalc(
       {
         projectName: projectData.projectName || 'Proyecto Importado',
-        tasks: projectData.tasks || INIT_TASKS,
-        resources: projectData.resources || INIT_RESOURCES,
-        holidays: projectData.holidays || INIT_HOLIDAYS,
-        startDate: projectData.startDate || '2026-06-01',
-        statusDate: projectData.statusDate || '2026-06-15',
-        workingDays: projectData.workingDays || INIT_WORKING_DAYS,
+        tasks: clone(projectData.tasks || []),
+        resources: clone(projectData.resources || []),
+        holidays: clone(projectData.holidays || []),
+        startDate: projectData.startDate || new Date().toISOString().split('T')[0],
+        statusDate: projectData.statusDate || projectData.startDate,
+        workingDays: clone(projectData.workingDays || INIT_WORKING_DAYS),
         past: [],
         future: [],
         canUndo: false,
@@ -454,12 +559,12 @@ export const useProjectStore = create((set, get) => ({
     get().recalc(
       {
         projectName: 'Construcción Edificio Central',
-        tasks: INIT_TASKS,
-        resources: INIT_RESOURCES,
-        holidays: INIT_HOLIDAYS,
+        tasks: clone(INIT_TASKS),
+        resources: clone(INIT_RESOURCES),
+        holidays: clone(INIT_HOLIDAYS),
         startDate: '2026-06-01',
         statusDate: '2026-06-15',
-        workingDays: INIT_WORKING_DAYS,
+        workingDays: clone(INIT_WORKING_DAYS),
         past: [],
         future: [],
         canUndo: false,
