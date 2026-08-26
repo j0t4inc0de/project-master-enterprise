@@ -106,16 +106,16 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
 
           {visibleTasks.length === 0 ? (
             <tr>
-              <td colSpan="13" className="text-center py-14 px-4 bg-slate-900/30">
-                <div className="flex flex-col items-center justify-center text-slate-400 gap-2.5">
-                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 text-lg border border-slate-700 shadow-inner">
+              <td colSpan="13" className="text-center py-16 px-4 bg-slate-900/30">
+                <div className="flex flex-col items-center justify-center text-slate-400 gap-2.5 my-4">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 text-lg border border-slate-700 shadow-inner mt-1">
                     <i className="fa-solid fa-list-check"></i>
                   </div>
                   <div className="text-xs font-bold text-slate-200">El proyecto está en blanco</div>
                   <div className="text-[11px] text-slate-400 max-w-sm">
                     Añade una partida principal o sube una planilla Excel (.xlsx) para comenzar a planificar.
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-2 mb-1">
                     <button
                       onClick={() => addTask(autoLink)}
                       className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all shadow cursor-pointer"
