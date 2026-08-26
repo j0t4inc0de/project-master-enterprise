@@ -56,7 +56,7 @@ export const exportReportToPDF = async (projectData, reportType = 'Carta Gantt')
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(13);
     pdf.setTextColor(255, 255, 255);
-    pdf.text(`Project Master Enterprise — ${reportType}`, 12, 9);
+    pdf.text(`Project Master Enterprise - ${reportType}`, 12, 9);
 
     pdf.setFontSize(8.5);
     pdf.setTextColor(148, 163, 184);
@@ -111,12 +111,12 @@ export const exportReportToPDF = async (projectData, reportType = 'Carta Gantt')
     resourceMap.set(r.id, r.name || r.initials);
   });
 
-  // Preparar filas de partidas
+  // Preparar filas de partidas (con indentación limpia 100% compatible con estándar PDF)
   const taskRows = (cpmResult.tasks && cpmResult.tasks.length > 0 ? cpmResult.tasks : tasks).map(
     (t) => {
       const isPhase = Boolean(t.isP);
       const isMilestone = Number(t.duration) === 0 && !isPhase;
-      const indentPrefix = t.level > 1 ? '   '.repeat(t.level - 1) + '└── ' : '';
+      const indentPrefix = t.level > 1 ? '    '.repeat(t.level - 1) + '- ' : '';
       const nameFormatted = isPhase ? `[FASE] ${t.name}` : `${indentPrefix}${t.name}`;
       const resName = t.resourceId ? resourceMap.get(String(t.resourceId)) || `Recurso #${t.resourceId}` : '-';
 
@@ -148,19 +148,19 @@ export const exportReportToPDF = async (projectData, reportType = 'Carta Gantt')
     }
   );
 
-  // Fila 0 de Resumen Global
+  // Fila 0 de Resumen Global (sin caracteres especiales que causen £)
   const summaryRow = [
-    'Σ',
+    '',
     'RESUMEN PROYECTO GLOBAL',
-    `Σ ${pSum.dur || 0} d`,
+    `${pSum.dur || 0} d`,
     '-',
     formatD(pSum.start),
     formatD(pSum.end),
     'Global',
     'Todos',
     pSum.prog >= 100 ? 'Completado' : 'En Curso',
-    `Σ ${(Number(pSum.prog) || 0).toFixed(0)}%`,
-    `Σ $${(Number(pSum.cost) || 0).toLocaleString()}`,
+    `${(Number(pSum.prog) || 0).toFixed(0)}%`,
+    `$${(Number(pSum.cost) || 0).toLocaleString()}`,
   ];
 
   const tableBody = [
@@ -277,7 +277,7 @@ export const exportReportToPDF = async (projectData, reportType = 'Carta Gantt')
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(13);
       pdf.setTextColor(255, 255, 255);
-      pdf.text(`Project Master Enterprise — ${reportType}`, 10, 9);
+      pdf.text(`Project Master Enterprise - ${reportType}`, 10, 9);
 
       // Subtítulo y Fechas
       pdf.setFontSize(8);
@@ -306,7 +306,7 @@ export const exportReportToPDF = async (projectData, reportType = 'Carta Gantt')
       pdf.setFontSize(7.5);
       pdf.setTextColor(100, 116, 139);
       pdf.text(
-        'Project Master Enterprise • Software de Planificación & Control de Obras • Documento Oficial de Cronograma',
+        'Project Master Enterprise | Software de Planificacion y Control de Obras | Documento Oficial',
         10,
         pdfHeight - 5
       );
