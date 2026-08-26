@@ -3,7 +3,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { exportProjectToExcel, importTasksFromExcel } from '../../lib/excelHandler';
 
 export const ExcelModal = ({ isOpen, onClose }) => {
-  const { projectName, tasks, resources, holidays, startDate, statusDate, workingDays, setTasks, loadProjectData } =
+  const { projectName, tasks, resources, holidays, startDate, statusDate, workingDays, setTasks, setResources } =
     useProjectStore();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -43,17 +43,52 @@ export const ExcelModal = ({ isOpen, onClose }) => {
       setErrorMsg('');
       setSuccessMsg('');
 
-      const importedTasks = await importTasksFromExcel(file, startDate);
+      const result = await importTasksFromExcel(file, startDate);
+      const importedTasks = Array.isArray(result) ? result : (result.tasks || []);
+      const importedResources = Array.isArray(result) ? null : result.resources;
 
+      // Cargar o anexar Recursos si están presentes en el Excel
+      if (importedResources && importedResources.length > 0) {
+        if (importMode === 'replace') {
+          setResources(importedResources);
+        } else {
+          const currentRes = resources;
+          const offsetResId = Math.max(...currentRes.map((r) => r.id), 0);
+          const existingNames = new Set(currentRes.map((r) => r.name.toLowerCase().trim()));
+          const newRes = [];
+          importedResources.forEach((r, idx) => {
+            if (!existingNames.has(r.name.toLowerCase().trim())) {
+              newRes.push({ ...r, id: offsetResId + idx + 1 });
+            }
+          });
+          if (newRes.length > 0) {
+            setResources([...currentRes, ...newRes]);
+          }
+        }
+      }
+
+      // Cargar o anexar Tareas
       if (importMode === 'replace') {
         setTasks(importedTasks);
-        setSuccessMsg(`Se importaron ${importedTasks.length} partidas (reemplazando las anteriores).`);
+        setSuccessMsg(
+          `Se importaron ${importedTasks.length} partidas${
+            importedResources && importedResources.length > 0
+              ? ` y ${importedResources.length} recursos del Pool`
+              : ''
+          } exitosamente (reemplazando los datos anteriores).`
+        );
       } else {
         const currentTasks = tasks;
         const offsetId = Math.max(...currentTasks.map((x) => x.id), 0);
         const renumbered = importedTasks.map((t, idx) => ({ ...t, id: offsetId + idx + 1 }));
         setTasks([...currentTasks, ...renumbered]);
-        setSuccessMsg(`Se anexaron ${renumbered.length} nuevas partidas al proyecto actual.`);
+        setSuccessMsg(
+          `Se anexaron ${renumbered.length} nuevas partidas${
+            importedResources && importedResources.length > 0
+              ? ` y se actualizaron los recursos`
+              : ''
+          } al proyecto actual.`
+        );
       }
     } catch (err) {
       setErrorMsg(err.message || 'Error al procesar el archivo Excel.');

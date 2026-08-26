@@ -13,7 +13,6 @@ export const useUIStore = create((set) => ({
   hoverDonut: null,
   hoverScurve: null,
   excelModalOpen: false,
-  pdfModalOpen: false,
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setLeftWidth: (leftWidth) => set({ leftWidth }),
@@ -26,7 +25,6 @@ export const useUIStore = create((set) => ({
   setHoverDonut: (hoverDonut) => set({ hoverDonut }),
   setHoverScurve: (hoverScurve) => set({ hoverScurve }),
   setExcelModalOpen: (excelModalOpen) => set({ excelModalOpen }),
-  setPdfModalOpen: (pdfModalOpen) => set({ pdfModalOpen }),
 
   toggleCollapse: (id) =>
     set((state) => ({

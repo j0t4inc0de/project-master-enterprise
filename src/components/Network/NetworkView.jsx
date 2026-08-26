@@ -1,10 +1,47 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { formatD } from '../../lib/cpmEngine';
 
 export const NetworkView = () => {
   const { cpmResult } = useProjectStore();
   const { netNodes = { nds: [], w: 800, h: 600 } } = cpmResult;
+
+  const nodeMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < netNodes.nds.length; i++) {
+      map.set(netNodes.nds[i].id, netNodes.nds[i]);
+    }
+    return map;
+  }, [netNodes.nds]);
+
+  const netLinks = useMemo(() => {
+    const links = [];
+    for (let i = 0; i < netNodes.nds.length; i++) {
+      const n = netNodes.nds[i];
+      if (!n.predecessors) continue;
+
+      const preds = String(n.predecessors).split(',');
+      for (let p = 0; p < preds.length; p++) {
+        const prId = parseInt(preds[p].trim());
+        if (isNaN(prId)) continue;
+        const pr = nodeMap.get(prId);
+        if (!pr) continue;
+
+        const isC = n.crit && pr.crit;
+        const sx = pr.x + pr.w;
+        const sy = pr.y + pr.h / 2;
+        const ex = n.x;
+        const ey = n.y + n.h / 2;
+
+        links.push({
+          key: `n-${pr.id}-${n.id}`,
+          d: `M ${sx} ${sy} C ${sx + 40} ${sy}, ${ex - 40} ${ey}, ${ex} ${ey}`,
+          isC,
+        });
+      }
+    }
+    return links;
+  }, [netNodes.nds, nodeMap]);
 
   return (
     <div className="p-8 h-full overflow-auto bg-[#09090b] relative custom-scrollbar">
@@ -44,31 +81,16 @@ export const NetworkView = () => {
             </marker>
           </defs>
 
-          {netNodes.nds.map((n) => {
-            if (!n.predecessors) return null;
-            return String(n.predecessors)
-              .split(',')
-              .map((p) => {
-                const pr = netNodes.nds.find((x) => x.id === parseInt(p.trim()));
-                if (!pr) return null;
-                const isC = n.crit && pr.crit;
-                const sx = pr.x + pr.w;
-                const sy = pr.y + pr.h / 2;
-                const ex = n.x;
-                const ey = n.y + n.h / 2;
-
-                return (
-                  <path
-                    key={`n-${pr.id}-${n.id}`}
-                    d={`M ${sx} ${sy} C ${sx + 40} ${sy}, ${ex - 40} ${ey}, ${ex} ${ey}`}
-                    fill="none"
-                    stroke={isC ? '#ef4444' : '#64748b'}
-                    strokeWidth={isC ? '2.5' : '1.5'}
-                    markerEnd={isC ? 'url(#m2)' : 'url(#m1)'}
-                  />
-                );
-              });
-          })}
+          {netLinks.map((link) => (
+            <path
+              key={link.key}
+              d={link.d}
+              fill="none"
+              stroke={link.isC ? '#ef4444' : '#64748b'}
+              strokeWidth={link.isC ? '2.5' : '1.5'}
+              markerEnd={link.isC ? 'url(#m2)' : 'url(#m1)'}
+            />
+          ))}
         </svg>
 
         {/* Nodos PERT (6 Campos Clásicos: ES, Dur, EF, ID, Nombre, LS, Holgura, LF) */}

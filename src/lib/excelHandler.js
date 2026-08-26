@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
  * Exporta el proyecto completo a un archivo Excel (.xlsx) con formato profesional
  */
 export const exportProjectToExcel = async (projectData) => {
-  const { projectName, tasks = [], resources = [], startDate, statusDate } = projectData;
+  const { projectName, tasks = [], resources = [] } = projectData;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Project Master Enterprise';
@@ -44,7 +44,7 @@ export const exportProjectToExcel = async (projectData) => {
 
   // Llenar datos de tareas
   tasks.forEach((t) => {
-    const res = resources.find((r) => r.id === t.resourceId);
+    const res = resources.find((r) => r.id === t.resourceId || String(r.id) === String(t.resourceId));
     const row = ganttSheet.addRow({
       id: t.id,
       level: t.level || 1,
@@ -133,76 +133,289 @@ export const exportProjectToExcel = async (projectData) => {
   window.URL.revokeObjectURL(url);
 };
 
+const getCellValueAsString = (cell) => {
+  if (!cell) return '';
+  const v = cell.value;
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'object') {
+    if (Array.isArray(v.richText)) {
+      return v.richText.map((t) => t.text || '').join('');
+    }
+    if (v.result !== undefined && v.result !== null) {
+      return String(v.result);
+    }
+    if (v.text) return String(v.text);
+  }
+  return cell.text || '';
+};
+
+const getCellValueAsNumber = (cell, defaultVal = 0) => {
+  if (!cell) return defaultVal;
+  const v = cell.value;
+  if (typeof v === 'number') return isNaN(v) ? defaultVal : v;
+  const str = getCellValueAsString(cell);
+  const clean = str.replace(/[^0-9.-]+/g, '');
+  if (!clean) return defaultVal;
+  const num = Number(clean);
+  return isNaN(num) ? defaultVal : num;
+};
+
 /**
- * Importa tareas desde un archivo Excel cargado por el usuario
+ * Importa tareas y recursos desde un archivo Excel cargado por el usuario
+ * Soporta hojas 'Partidas Gantt' y 'Pool de Recursos'
  */
 export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01') => {
   const arrayBuffer = await file.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(arrayBuffer);
 
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) {
+  if (!workbook.worksheets || workbook.worksheets.length === 0) {
     throw new Error('El archivo Excel no contiene ninguna hoja de datos.');
   }
 
-  // Identificar encabezados en la fila 1
+  // 1. Identificar hojas de tareas y de recursos
+  let taskWorksheet = null;
+  let resourceWorksheet = null;
+
+  // Búsqueda por nombre de hoja
+  for (const ws of workbook.worksheets) {
+    const name = ws.name.trim().toLowerCase();
+    if (!resourceWorksheet && (name.includes('recurso') || name.includes('resource') || name.includes('pool'))) {
+      resourceWorksheet = ws;
+    } else if (!taskWorksheet && (name.includes('partida') || name.includes('gantt') || name.includes('tarea') || name.includes('cronograma') || name.includes('cubica') || name.includes('itemizado'))) {
+      taskWorksheet = ws;
+    }
+  }
+
+  // Si no se encontraron por nombre, asignar hoja principal
+  if (!taskWorksheet) {
+    taskWorksheet = workbook.worksheets[0];
+  }
+  if (!resourceWorksheet && workbook.worksheets.length > 1) {
+    for (const ws of workbook.worksheets) {
+      if (ws !== taskWorksheet) {
+        resourceWorksheet = ws;
+        break;
+      }
+    }
+  }
+
+  // 2. Parsear Recursos si existe la hoja correspondiente
+  const parsedResources = [];
+  if (resourceWorksheet) {
+    const resHeaderMap = {};
+    let headerRowIdx = 1;
+
+    // Buscar fila de encabezados en las primeras 5 filas
+    for (let r = 1; r <= Math.min(5, resourceWorksheet.rowCount); r++) {
+      const row = resourceWorksheet.getRow(r);
+      let foundHeaders = 0;
+      row.eachCell((cell, colNumber) => {
+        const val = getCellValueAsString(cell).trim().toLowerCase();
+        if (/costo\s*(?:x|por)?\s*uso|costperuse|fijo|costo\s*uso/i.test(val)) {
+          resHeaderMap['costPerUse'] = colNumber;
+          foundHeaders++;
+        } else if (/tarifa|rate|precio|valor|tasa|costo\s*(?:hora|\/hora|\/um|unit|est|\.est)/i.test(val)) {
+          resHeaderMap['rate'] = colNumber;
+          foundHeaders++;
+        } else if (/descrip|nombre|recurso/i.test(val)) {
+          resHeaderMap['name'] = colNumber;
+          foundHeaders++;
+        } else if (/^(id|código|codigo|item|n°|nro)$/i.test(val) || val === 'id') {
+          resHeaderMap['id'] = colNumber;
+          foundHeaders++;
+        } else if (/tipo|type/i.test(val)) {
+          resHeaderMap['type'] = colNumber;
+          foundHeaders++;
+        } else if (/^(u\.?m\.?|um|unidad|unit|medida)$/i.test(val) || /\bu\.?m\.?\b/i.test(val)) {
+          resHeaderMap['unit'] = colNumber;
+          foundHeaders++;
+        } else if (/inici|sigla/i.test(val)) {
+          resHeaderMap['initials'] = colNumber;
+          foundHeaders++;
+        } else if (/grupo|group/i.test(val)) {
+          resHeaderMap['group'] = colNumber;
+          foundHeaders++;
+        } else if (/capacid|max|cap/i.test(val)) {
+          resHeaderMap['capacity'] = colNumber;
+          foundHeaders++;
+        } else if (/acumul|devengo|accrual/i.test(val)) {
+          resHeaderMap['accrual'] = colNumber;
+          foundHeaders++;
+        }
+      });
+      if (foundHeaders >= 2) {
+        headerRowIdx = r;
+        break;
+      }
+    }
+
+    if (resHeaderMap['name'] || resHeaderMap['id']) {
+      let currentResId = 1;
+      resourceWorksheet.eachRow((row, rowNumber) => {
+        if (rowNumber <= headerRowIdx) return;
+        const rawName = resHeaderMap['name'] ? getCellValueAsString(row.getCell(resHeaderMap['name'])) : '';
+        if (!rawName || rawName.trim() === '') return;
+
+        const rawId = resHeaderMap['id'] ? getCellValueAsNumber(row.getCell(resHeaderMap['id']), NaN) : NaN;
+        const resId = isNaN(rawId) ? currentResId++ : rawId;
+        if (resId >= currentResId) currentResId = resId + 1;
+
+        const rawType = resHeaderMap['type'] ? getCellValueAsString(row.getCell(resHeaderMap['type'])).trim() : 'Trabajo';
+        const type = rawType.toLowerCase().includes('mat') ? 'Material' : rawType.toLowerCase().includes('cost') ? 'Costo' : 'Trabajo';
+
+        const unit = resHeaderMap['unit'] ? getCellValueAsString(row.getCell(resHeaderMap['unit'])).trim() : (type === 'Trabajo' ? 'Hrs' : 'Un');
+        const initials = resHeaderMap['initials'] ? getCellValueAsString(row.getCell(resHeaderMap['initials'])).trim() : rawName.substring(0, 3).toUpperCase();
+        const group = resHeaderMap['group'] ? getCellValueAsString(row.getCell(resHeaderMap['group'])).trim() : 'General';
+
+        let capacity = 100;
+        if (resHeaderMap['capacity']) {
+          const capVal = getCellValueAsNumber(row.getCell(resHeaderMap['capacity']), 100);
+          if (!isNaN(capVal) && capVal > 0) {
+            capacity = capVal <= 1 ? Math.round(capVal * 100) : capVal;
+          }
+        }
+
+        const rawRate = resHeaderMap['rate'] ? getCellValueAsNumber(row.getCell(resHeaderMap['rate']), 0) : 0;
+        const rawCostPerUse = resHeaderMap['costPerUse'] ? getCellValueAsNumber(row.getCell(resHeaderMap['costPerUse']), 0) : 0;
+        const accrual = resHeaderMap['accrual'] ? getCellValueAsString(row.getCell(resHeaderMap['accrual'])).trim() : 'Prorrateo';
+
+        parsedResources.push({
+          id: resId,
+          name: rawName.trim(),
+          type,
+          unit: unit || 'Hrs',
+          initials: initials || 'REC',
+          group: group || 'General',
+          capacity: isNaN(capacity) ? 100 : capacity,
+          rate: isNaN(rawRate) ? 0 : rawRate,
+          costPerUse: isNaN(rawCostPerUse) ? 0 : rawCostPerUse,
+          accrual: ['Inicio', 'Fin'].includes(accrual) ? accrual : 'Prorrateo',
+        });
+      });
+    }
+  }
+
+  // 3. Parsear Partidas / Tareas
   const headerMap = {};
-  const firstRow = worksheet.getRow(1);
-  firstRow.eachCell((cell, colNumber) => {
-    const val = String(cell.value || '').trim().toLowerCase();
-    if (val.includes('id') || val.includes('código') || val.includes('item')) headerMap['id'] = colNumber;
-    else if (val.includes('descrip') || val.includes('nombre') || val.includes('tarea') || val.includes('partida')) headerMap['name'] = colNumber;
-    else if (val.includes('durac') || val.includes('dias') || val.includes('plazo')) headerMap['duration'] = colNumber;
-    else if (val.includes('inici') || val.includes('comienzo') || val.includes('start')) headerMap['startDate'] = colNumber;
-    else if (val.includes('pred') || val.includes('depend') || val.includes('vinc')) headerMap['predecessors'] = colNumber;
-    else if (val.includes('nivel') || val.includes('wbs') || val.includes('edt')) headerMap['level'] = colNumber;
-    else if (val.includes('prog') || val.includes('avance') || val.includes('%')) headerMap['progress'] = colNumber;
-    else if (val.includes('cost') || val.includes('presupuesto') || val.includes('monto')) headerMap['cost'] = colNumber;
-    else if (val.includes('demora in') || val.includes('pos.in')) headerMap['startDelay'] = colNumber;
-    else if (val.includes('demora fin') || val.includes('pos.fin')) headerMap['finishDelay'] = colNumber;
-  });
+  let taskHeaderRowIdx = 1;
+
+  for (let r = 1; r <= Math.min(5, taskWorksheet.rowCount); r++) {
+    const row = taskWorksheet.getRow(r);
+    let foundHeaders = 0;
+    row.eachCell((cell, colNumber) => {
+      const val = getCellValueAsString(cell).trim().toLowerCase();
+      if (/descrip|nombre|tarea|partida|actividad/i.test(val)) {
+        headerMap['name'] = colNumber;
+        foundHeaders++;
+      } else if (/^(id|código|codigo|item|n°|nro)$/i.test(val) || val === 'id') {
+        headerMap['id'] = colNumber;
+        foundHeaders++;
+      } else if (/durac|dias|días|plazo/i.test(val)) {
+        headerMap['duration'] = colNumber;
+        foundHeaders++;
+      } else if (/inici|comienzo|start/i.test(val)) {
+        headerMap['startDate'] = colNumber;
+        foundHeaders++;
+      } else if (/pred|depend|vinc/i.test(val)) {
+        headerMap['predecessors'] = colNumber;
+        foundHeaders++;
+      } else if (/nivel|wbs|edt/i.test(val)) {
+        headerMap['level'] = colNumber;
+        foundHeaders++;
+      } else if (/prog|avance|%/i.test(val)) {
+        headerMap['progress'] = colNumber;
+        foundHeaders++;
+      } else if (/cost|presupuesto|monto|total/i.test(val)) {
+        headerMap['cost'] = colNumber;
+        foundHeaders++;
+      } else if (/demora\s*in|pos\.?\s*in|pos\s*in/i.test(val)) {
+        headerMap['startDelay'] = colNumber;
+        foundHeaders++;
+      } else if (/demora\s*fin|pos\.?\s*fin|pos\s*fin/i.test(val)) {
+        headerMap['finishDelay'] = colNumber;
+        foundHeaders++;
+      } else if (/recurs|resource|responsable/i.test(val)) {
+        headerMap['resource'] = colNumber;
+        foundHeaders++;
+      } else if (/estado|status/i.test(val)) {
+        headerMap['manualStatus'] = colNumber;
+        foundHeaders++;
+      }
+    });
+    if (foundHeaders >= 2) {
+      taskHeaderRowIdx = r;
+      break;
+    }
+  }
 
   const parsedTasks = [];
   let currentId = 1;
 
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // Omitir cabecera
+  taskWorksheet.eachRow((row, rowNumber) => {
+    if (rowNumber <= taskHeaderRowIdx) return;
 
-    const rawName = headerMap['name'] ? row.getCell(headerMap['name']).text : '';
+    const rawName = headerMap['name'] ? getCellValueAsString(row.getCell(headerMap['name'])) : '';
     if (!rawName || rawName.trim() === '') return;
 
-    // Detectar nivel por espacios o columna explícita
+    // Detectar nivel por columna explícita o por indentación de espacios / numeración
     let level = 1;
     if (headerMap['level']) {
-      level = parseInt(row.getCell(headerMap['level']).value) || 1;
+      level = getCellValueAsNumber(row.getCell(headerMap['level']), 1);
     } else {
       const leadingSpaces = rawName.search(/\S|$/);
       if (leadingSpaces >= 4) level = 3;
       else if (leadingSpaces >= 2) level = 2;
     }
 
-    const durationVal = headerMap['duration'] ? parseInt(row.getCell(headerMap['duration']).value) : 1;
-    const rawCost = headerMap['cost'] ? Number(String(row.getCell(headerMap['cost']).value).replace(/[^0-9.-]+/g, '')) : 0;
-    const rawProgress = headerMap['progress'] ? Number(String(row.getCell(headerMap['progress']).value).replace(/[^0-9.-]+/g, '')) : 0;
+    const rawDuration = headerMap['duration'] ? getCellValueAsNumber(row.getCell(headerMap['duration']), 1) : 1;
+    const rawCost = headerMap['cost'] ? getCellValueAsNumber(row.getCell(headerMap['cost']), 0) : 0;
+    const rawProgress = headerMap['progress'] ? getCellValueAsNumber(row.getCell(headerMap['progress']), 0) : 0;
     const progressVal = rawProgress <= 1 && rawProgress > 0 ? Math.round(rawProgress * 100) : Math.min(100, Math.max(0, rawProgress || 0));
 
-    const predsVal = headerMap['predecessors'] ? String(row.getCell(headerMap['predecessors']).value || '').trim() : '';
+    const predsVal = headerMap['predecessors'] ? getCellValueAsString(row.getCell(headerMap['predecessors'])).trim() : '';
+
+    // Vincular recurso asignado si existe en parsedResources
+    let assignedResourceId = '';
+    if (headerMap['resource']) {
+      const rawRes = getCellValueAsString(row.getCell(headerMap['resource'])).trim();
+      if (rawRes && rawRes !== 'N/A' && rawRes !== '-') {
+        // Intentar match con parsedResources por ID, iniciales o nombre
+        const matched = parsedResources.find(
+          (r) =>
+            String(r.id) === rawRes ||
+            r.initials.toLowerCase() === rawRes.toLowerCase() ||
+            rawRes.toLowerCase().includes(r.initials.toLowerCase()) ||
+            rawRes.toLowerCase().includes(r.name.toLowerCase())
+        );
+        if (matched) {
+          assignedResourceId = matched.id;
+        } else {
+          const numericResId = parseInt(rawRes);
+          if (!isNaN(numericResId)) assignedResourceId = numericResId;
+        }
+      }
+    }
+
+    const rawStatus = headerMap['manualStatus'] ? getCellValueAsString(row.getCell(headerMap['manualStatus'])).trim() : 'AUTO';
+    const manualStatus = ['Completada', 'Con Retraso', 'En Plazo', 'Pendiente'].includes(rawStatus) ? rawStatus : 'AUTO';
 
     parsedTasks.push({
       id: currentId++,
       name: rawName.trim(),
-      duration: isNaN(durationVal) ? 1 : Math.max(0, durationVal),
+      duration: isNaN(rawDuration) ? 1 : Math.max(0, rawDuration),
       startDate: defaultStartDate,
       progress: progressVal,
       cost: isNaN(rawCost) ? 0 : rawCost,
       predecessors: predsVal,
-      startDelay: headerMap['startDelay'] ? parseInt(row.getCell(headerMap['startDelay']).value) || 0 : 0,
-      finishDelay: headerMap['finishDelay'] ? parseInt(row.getCell(headerMap['finishDelay']).value) || 0 : 0,
-      resourceId: '',
+      startDelay: headerMap['startDelay'] ? getCellValueAsNumber(row.getCell(headerMap['startDelay']), 0) : 0,
+      finishDelay: headerMap['finishDelay'] ? getCellValueAsNumber(row.getCell(headerMap['finishDelay']), 0) : 0,
+      resourceId: assignedResourceId,
       level: Math.max(1, Math.min(4, level)),
       manualStart: '',
-      manualStatus: 'AUTO',
+      manualStatus,
     });
   });
 
@@ -210,5 +423,9 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
     throw new Error('No se encontraron filas con partidas válidas en el archivo.');
   }
 
-  return parsedTasks;
+  return {
+    tasks: parsedTasks,
+    resources: parsedResources.length > 0 ? parsedResources : null,
+  };
 };
+

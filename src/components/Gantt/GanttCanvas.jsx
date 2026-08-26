@@ -1,12 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
-import { isWorkDay } from '../../lib/cpmEngine';
+import { isWorkDay, toHolidaySet } from '../../lib/cpmEngine';
 
 export const GanttCanvas = ({
   canvasScrollRef,
   headerScrollRef,
-  onScroll,
   visibleTasks = [],
   minD,
   tlDays = [],
@@ -15,7 +14,131 @@ export const GanttCanvas = ({
   const { zoom, showLinks } = useUIStore();
 
   const totalWidth = tlDays.length * zoom;
-  const statusDatePx = Math.max(0, (new Date(statusDate + 'T00:00:00') - minD) / (1000 * 3600 * 24)) * zoom;
+  const minTime = minD ? minD.getTime() : 0;
+
+  // Mapa de recursos para lookup O(1)
+  const resourceInitialsMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < resources.length; i++) {
+      map.set(resources[i].id, resources[i].initials);
+      map.set(String(resources[i].id), resources[i].initials);
+    }
+    return map;
+  }, [resources]);
+
+  // Set de feriados normalizado
+  const holidaySet = useMemo(() => toHolidaySet(holidays), [holidays]);
+
+  // Posición X de la fecha de estado
+  const statusDatePx = useMemo(() => {
+    if (!minTime) return 0;
+    const stTime = new Date(statusDate + 'T00:00:00').getTime();
+    return Math.max(0, (stTime - minTime) / (1000 * 3600 * 24)) * zoom;
+  }, [statusDate, minTime, zoom]);
+
+  // Barra de resumen global del proyecto en cabecera
+  const globalSummaryBar = useMemo(() => {
+    if (!cpmResult.end || !minTime) return null;
+    const sT = new Date(startDate + 'T00:00:00').getTime();
+    const eT = new Date(cpmResult.end + 'T00:00:00').getTime();
+    const left = Math.max(0, (sT - minTime) / (1000 * 3600 * 24)) * zoom;
+    const width = Math.max(1, (eT - sT) / (1000 * 3600 * 24)) * zoom;
+    return { left, width };
+  }, [startDate, cpmResult.end, minTime, zoom]);
+
+  // Pre-calcular grupos de meses del timeline
+  const monthGroups = useMemo(() => {
+    const groups = [];
+    let currentMonth = null;
+    let currentCount = 0;
+
+    for (let i = 0; i < tlDays.length; i++) {
+      const d = tlDays[i];
+      const m = d.toLocaleString('es-CL', { month: 'short', year: 'numeric' });
+      if (currentMonth === null) {
+        currentMonth = m;
+        currentCount = 1;
+      } else if (currentMonth === m) {
+        currentCount++;
+      } else {
+        groups.push({ label: currentMonth, count: currentCount });
+        currentMonth = m;
+        currentCount = 1;
+      }
+    }
+    if (currentMonth !== null) {
+      groups.push({ label: currentMonth, count: currentCount });
+    }
+    return groups;
+  }, [tlDays]);
+
+  // Pre-calcular días no laborales para el timeline
+  const dayItems = useMemo(() => {
+    return tlDays.map((d) => ({
+      date: d.getDate(),
+      isWork: isWorkDay(d, workingDays, holidaySet),
+    }));
+  }, [tlDays, workingDays, holidaySet]);
+
+  // Pre-calcular flechas SVG de dependencias con índice O(1)
+  const svgLinks = useMemo(() => {
+    if (!showLinks || visibleTasks.length === 0 || !minTime) return [];
+
+    const taskIndexMap = new Map();
+    for (let i = 0; i < visibleTasks.length; i++) {
+      taskIndexMap.set(visibleTasks[i].id, { task: visibleTasks[i], index: i });
+    }
+
+    const links = [];
+
+    for (let idx = 0; idx < visibleTasks.length; idx++) {
+      const t = visibleTasks[idx];
+      if (!t.predecessors || t.isP) continue;
+
+      const preds = String(t.predecessors).split(',');
+      for (let p = 0; p < preds.length; p++) {
+        const predId = parseInt(preds[p].trim());
+        if (isNaN(predId)) continue;
+
+        const predEntry = taskIndexMap.get(predId);
+        if (!predEntry) continue;
+
+        const pr = predEntry.task;
+        const pIdx = predEntry.index;
+
+        const pStart = new Date(pr.ES + 'T00:00:00').getTime();
+        const pEnd = new Date(pr.EF + 'T00:00:00').getTime();
+        const cStart = new Date(t.ES + 'T00:00:00').getTime();
+        if (isNaN(pStart) || isNaN(pEnd) || isNaN(cStart)) continue;
+
+        const endPx =
+          Math.max(
+            0,
+            (pEnd - minTime) / (1000 * 3600 * 24) + (parseInt(pr.duration) === 0 ? 0 : 1)
+          ) * zoom;
+        const startPx = Math.max(0, (cStart - minTime) / (1000 * 3600 * 24)) * zoom;
+
+        const pY = pIdx * 32 + 16;
+        const cY = idx * 32 + 16;
+
+        const d =
+          startPx >= endPx + 10
+            ? `M ${endPx} ${pY} L ${endPx + 10} ${pY} L ${endPx + 10} ${cY} L ${startPx - 4} ${cY}`
+            : `M ${endPx} ${pY} L ${endPx + 8} ${pY} L ${endPx + 8} ${pY + (cY > pY ? 16 : -16)} L ${
+                startPx - 8
+              } ${pY + (cY > pY ? 16 : -16)} L ${startPx - 8} ${cY} L ${startPx - 4} ${cY}`;
+
+        const isC = t.crit && pr.crit;
+        links.push({
+          key: `l-${pr.id}-${t.id}`,
+          d,
+          isC,
+        });
+      }
+    }
+
+    return links;
+  }, [showLinks, visibleTasks, minTime, zoom]);
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col bg-[#0f172a] z-10 relative">
@@ -28,22 +151,12 @@ export const GanttCanvas = ({
         <div style={{ width: `${totalWidth}px` }} className="flex flex-col h-full">
           {/* Barra Resumen Global en Gantt Header */}
           <div className="h-[32px] bg-amber-500 border-b border-amber-700 relative box-border">
-            {cpmResult.end && (
+            {globalSummaryBar && (
               <div
                 className="absolute top-2 h-3.5 bg-slate-800 rounded shadow"
                 style={{
-                  left: `${
-                    Math.max(0, (new Date(startDate + 'T00:00:00').getTime() - minD.getTime()) / (1000 * 3600 * 24)) *
-                    zoom
-                  }px`,
-                  width: `${
-                    Math.max(
-                      1,
-                      (new Date(cpmResult.end + 'T00:00:00').getTime() -
-                        new Date(startDate + 'T00:00:00').getTime()) /
-                        (1000 * 3600 * 24)
-                    ) * zoom
-                  }px`,
+                  left: `${globalSummaryBar.left}px`,
+                  width: `${globalSummaryBar.width}px`,
                 }}
               ></div>
             )}
@@ -51,42 +164,30 @@ export const GanttCanvas = ({
 
           {/* Fila de Meses */}
           <div className="h-[16px] flex bg-slate-800 border-b border-slate-700 box-border text-[9px] font-bold text-slate-300">
-            {tlDays.reduce((acc, date, i, arr) => {
-              const m = date.toLocaleString('es-CL', { month: 'short', year: 'numeric' });
-              if (i === 0 || arr[i - 1].getMonth() !== date.getMonth()) {
-                const dinM = arr.filter(
-                  (d) => d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear()
-                ).length;
-                acc.push(
-                  <div
-                    key={m + i}
-                    className="border-r border-slate-700 px-2 flex items-center shrink-0 overflow-hidden"
-                    style={{ width: `${dinM * zoom}px` }}
-                  >
-                    {m}
-                  </div>
-                );
-              }
-              return acc;
-            }, [])}
+            {monthGroups.map((g, i) => (
+              <div
+                key={i}
+                className="border-r border-slate-700 px-2 flex items-center shrink-0 overflow-hidden"
+                style={{ width: `${g.count * zoom}px` }}
+              >
+                {g.label}
+              </div>
+            ))}
           </div>
 
           {/* Fila de Días */}
           <div className="h-[16px] flex bg-slate-900 box-border">
-            {tlDays.map((d, i) => {
-              const isWork = isWorkDay(d, workingDays, holidays);
-              return (
-                <div
-                  key={i}
-                  className={`border-r border-slate-800 flex flex-col items-center justify-center text-[8px] font-bold ${
-                    !isWork ? 'bg-rose-900/20 text-rose-500' : 'text-slate-400'
-                  }`}
-                  style={{ width: `${zoom}px` }}
-                >
-                  {zoom > 18 ? <span>{d.getDate()}</span> : null}
-                </div>
-              );
-            })}
+            {dayItems.map((d, i) => (
+              <div
+                key={i}
+                className={`border-r border-slate-800 flex flex-col items-center justify-center text-[8px] font-bold shrink-0 ${
+                  !d.isWork ? 'bg-rose-900/20 text-rose-500' : 'text-slate-400'
+                }`}
+                style={{ width: `${zoom}px` }}
+              >
+                {zoom > 18 ? <span>{d.date}</span> : null}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -94,7 +195,6 @@ export const GanttCanvas = ({
       {/* 2. Cuerpo del Lienzo con Barras y Flechas */}
       <div
         ref={canvasScrollRef}
-        onScroll={onScroll}
         className="flex-1 overflow-auto relative custom-scrollbar select-none"
       >
         <div
@@ -105,7 +205,7 @@ export const GanttCanvas = ({
           }}
         >
           {/* Capa SVG de Flechas de Precedencia */}
-          {showLinks && (
+          {showLinks && svgLinks.length > 0 && (
             <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-visible">
               <defs>
                 <marker
@@ -132,70 +232,33 @@ export const GanttCanvas = ({
                 </marker>
               </defs>
 
-              {visibleTasks.map((t, idx) => {
-                if (!t.predecessors || t.isP) return null;
-                return String(t.predecessors)
-                  .split(',')
-                  .map((p) => {
-                    const pIdx = visibleTasks.findIndex((x) => x.id === parseInt(p.trim()));
-                    if (pIdx === -1) return null;
-                    const pr = visibleTasks[pIdx];
-
-                    const pStart = new Date(pr.ES + 'T00:00:00').getTime();
-                    const pEnd = new Date(pr.EF + 'T00:00:00').getTime();
-                    const cStart = new Date(t.ES + 'T00:00:00').getTime();
-                    if (isNaN(pStart) || isNaN(pEnd) || isNaN(cStart)) return null;
-
-                    const endPx =
-                      Math.max(
-                        0,
-                        (pEnd - minD.getTime()) / (1000 * 3600 * 24) + (parseInt(pr.duration) === 0 ? 0 : 1)
-                      ) * zoom;
-                    const startPx = Math.max(0, (cStart - minD.getTime()) / (1000 * 3600 * 24)) * zoom;
-
-                    const pY = pIdx * 32 + 16;
-                    const cY = idx * 32 + 16;
-
-                    let d =
-                      startPx >= endPx + 10
-                        ? `M ${endPx} ${pY} L ${endPx + 10} ${pY} L ${endPx + 10} ${cY} L ${startPx - 4} ${cY}`
-                        : `M ${endPx} ${pY} L ${endPx + 8} ${pY} L ${endPx + 8} ${pY + (cY > pY ? 16 : -16)} L ${
-                            startPx - 8
-                          } ${pY + (cY > pY ? 16 : -16)} L ${startPx - 8} ${cY} L ${startPx - 4} ${cY}`;
-
-                    const isC = t.crit && pr.crit;
-                    return (
-                      <path
-                        key={`l-${pr.id}-${t.id}`}
-                        d={d}
-                        fill="none"
-                        stroke={isC ? '#ef4444' : '#64748b'}
-                        strokeWidth={isC ? '2' : '1.5'}
-                        markerEnd={isC ? 'url(#arrcrit)' : 'url(#arr)'}
-                        opacity={isC ? 1 : 0.65}
-                      />
-                    );
-                  });
-              })}
+              {svgLinks.map((link) => (
+                <path
+                  key={link.key}
+                  d={link.d}
+                  fill="none"
+                  stroke={link.isC ? '#ef4444' : '#64748b'}
+                  strokeWidth={link.isC ? '2' : '1.5'}
+                  markerEnd={link.isC ? 'url(#arrcrit)' : 'url(#arr)'}
+                  opacity={link.isC ? 1 : 0.65}
+                />
+              ))}
             </svg>
           )}
 
           {/* Capa de Fondo (Rayas de Días No Laborales + Línea de Estado) */}
           <div className="absolute inset-y-0 left-0 flex pointer-events-none w-full h-full z-0">
-            {tlDays.map((d, i) => {
-              const isWork = isWorkDay(d, workingDays, holidays);
-              return (
-                <div
-                  key={i}
-                  className={`border-r border-slate-800/30 h-full ${!isWork ? 'bg-non-working' : ''}`}
-                  style={{ width: `${zoom}px` }}
-                />
-              );
-            })}
+            {dayItems.map((d, i) => (
+              <div
+                key={i}
+                className={`border-r border-slate-800/30 h-full shrink-0 ${!d.isWork ? 'bg-non-working' : ''}`}
+                style={{ width: `${zoom}px` }}
+              />
+            ))}
 
             {/* Línea de Fecha de Estado */}
             <div
-              className="absolute top-0 bottom-0 border-l border-dashed border-emerald-500 h-full z-10"
+              className="absolute top-0 bottom-0 border-l border-dashed border-emerald-500 h-full z-10 pointer-events-none"
               style={{ left: `${statusDatePx}px` }}
             >
               <div className="bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-b absolute top-0 -translate-x-1/2 shadow-lg">
@@ -210,14 +273,14 @@ export const GanttCanvas = ({
               const sT = new Date(t.ES + 'T00:00:00').getTime();
               const eT = new Date(t.EF + 'T00:00:00').getTime();
 
-              if (isNaN(sT) || isNaN(eT)) {
+              if (isNaN(sT) || isNaN(eT) || !minTime) {
                 return <div key={t.id} className="w-full border-b border-slate-700/50 h-[32px]"></div>;
               }
 
               const dur = parseInt(t.duration) || 0;
-              const left = Math.max(0, (sT - minD.getTime()) / (1000 * 3600 * 24)) * zoom;
+              const left = Math.max(0, (sT - minTime) / (1000 * 3600 * 24)) * zoom;
               const width = Math.max(1, (eT - sT) / (1000 * 3600 * 24) + (!t.isP && dur === 0 ? 0 : 1)) * zoom;
-              const rIni = resources.find((r) => r.id === t.resourceId)?.initials;
+              const rIni = resourceInitialsMap.get(t.resourceId);
 
               return (
                 <div
@@ -237,9 +300,13 @@ export const GanttCanvas = ({
                   ) : dur === 0 ? (
                     /* 2. Hito (Rombo Girado 45 Grados) */
                     <div
-                      className="absolute w-3.5 h-3.5 bg-slate-500 rotate-45 border-2 border-slate-300 ml-1.5 shadow"
+                      className={`absolute w-3.5 h-3.5 rotate-45 border-2 ml-1.5 shadow transition-all ${
+                        t.crit
+                          ? 'bg-rose-600 border-rose-300 shadow-[0_0_8px_rgba(239,68,68,0.8)]'
+                          : 'bg-blue-600 border-blue-300'
+                      }`}
                       style={{ left: `${left}px` }}
-                      title={`Hito: ${t.name}`}
+                      title={`Hito: ${t.name}${t.crit ? ' (Crítico)' : ''}`}
                     ></div>
                   ) : (
                     /* 3. Barra 3D Normal o Crítica */
@@ -279,3 +346,4 @@ export const GanttCanvas = ({
     </div>
   );
 };
+

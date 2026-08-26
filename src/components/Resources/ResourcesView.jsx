@@ -56,17 +56,17 @@ export const ResourcesView = () => {
               onChange={(e) => setResFilters({ ...resFilters, type: e.target.value })}
               className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-300 outline-none w-40 cursor-pointer shadow-inner focus:border-blue-500"
             >
-              <option value="ALL">📋 Todos los Tipos</option>
-              <option value="Trabajo">🔨 Trabajo</option>
-              <option value="Material">🧱 Material</option>
-              <option value="Costo">💲 Costo</option>
+              <option value="ALL">Todos los Tipos</option>
+              <option value="Trabajo">Trabajo</option>
+              <option value="Material">Material</option>
+              <option value="Costo">Costo</option>
             </select>
             <select
               value={resFilters.group}
               onChange={(e) => setResFilters({ ...resFilters, group: e.target.value })}
               className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-300 outline-none w-48 cursor-pointer shadow-inner focus:border-blue-500"
             >
-              <option value="ALL">📁 Todos los Grupos</option>
+              <option value="ALL">Todos los Grupos</option>
               <option value="Mano de Obra">Mano de Obra</option>
               <option value="Equipos">Equipos</option>
               <option value="Materiales">Materiales</option>
@@ -77,7 +77,7 @@ export const ResourcesView = () => {
               onChange={(e) => setResFilters({ ...resFilters, accrual: e.target.value })}
               className="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-300 outline-none w-40 cursor-pointer shadow-inner focus:border-blue-500"
             >
-              <option value="ALL">💰 Acumulación: Todas</option>
+              <option value="ALL">Acumulación: Todas</option>
               <option value="Prorrateo">Prorrateo</option>
               <option value="Inicio">Inicio</option>
               <option value="Fin">Fin</option>

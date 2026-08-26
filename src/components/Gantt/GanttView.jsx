@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
 import { GanttToolbar } from './GanttToolbar';
@@ -26,15 +26,15 @@ export const GanttView = () => {
   const headerScrollRef = useRef(null);
 
   const isDragging = useRef(false);
-  const syncFromLeft = useRef(false);
-  const syncFromRight = useRef(false);
+  const isSyncingVertical = useRef(false);
 
-  const actTasks = cpmResult.tasks || [];
-
-  // Filtrado de tareas según búsqueda y estado
+  // Filtrado y colapso jerárquico de tareas
   const visibleTasks = useMemo(() => {
-    let filtered = actTasks.filter((t) => {
-      if (searchQuery && !t.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+    const tasksList = cpmResult.tasks || [];
+    const query = searchQuery ? searchQuery.trim().toLowerCase() : '';
+
+    const filtered = tasksList.filter((t) => {
+      if (query && !t.name.toLowerCase().includes(query)) {
         return false;
       }
       if (taskFilter === 'CRITICAL' && (!t.crit || t.isP)) return false;
@@ -42,12 +42,13 @@ export const GanttView = () => {
       return true;
     });
 
-    let res = [];
+    const res = [];
     let skipLevel = null;
-    for (let t of filtered) {
+    for (let i = 0; i < filtered.length; i++) {
+      const t = filtered[i];
       if (skipLevel !== null) {
         if (t.level > skipLevel) continue;
-        else skipLevel = null;
+        skipLevel = null;
       }
       res.push(t);
       if (collapsed.includes(t.id) && t.isP) {
@@ -55,7 +56,7 @@ export const GanttView = () => {
       }
     }
     return res;
-  }, [actTasks, searchQuery, taskFilter, collapsed]);
+  }, [cpmResult.tasks, searchQuery, taskFilter, collapsed]);
 
   // Cálculo de rango de fechas del timeline
   const { minD, tlDays } = useMemo(() => {
@@ -67,66 +68,94 @@ export const GanttView = () => {
     if (isNaN(e.getTime())) e = new Date();
     e.setDate(e.getDate() + 15);
 
-    let arr = [];
+    const arr = [];
     let count = Math.ceil((e - s) / (1000 * 3600 * 24));
     if (isNaN(count) || count < 0 || count > 3000) count = 100;
     for (let i = 0; i <= count; i++) {
-      let d = new Date(s);
+      const d = new Date(s);
       d.setDate(d.getDate() + i);
       arr.push(d);
     }
     return { minD: s, tlDays: arr };
   }, [startDate, cpmResult.end]);
 
-  // Manejadores del Splitter Arrastrable
+  // Sincronización de Scroll vertical y horizontal a 60 FPS mediante Refs y Event Listeners Pasivos
+  useEffect(() => {
+    const tableEl = tableScrollRef.current;
+    const canvasEl = canvasScrollRef.current;
+    const headerEl = headerScrollRef.current;
+
+    if (!tableEl || !canvasEl) return;
+
+    let rafId = null;
+
+    const handleTableScroll = () => {
+      if (isSyncingVertical.current === 'canvas') return;
+      isSyncingVertical.current = 'table';
+      canvasEl.scrollTop = tableEl.scrollTop;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        isSyncingVertical.current = null;
+      });
+    };
+
+    const handleCanvasScroll = () => {
+      if (headerEl) {
+        headerEl.scrollLeft = canvasEl.scrollLeft;
+      }
+      if (isSyncingVertical.current === 'table') return;
+      isSyncingVertical.current = 'canvas';
+      tableEl.scrollTop = canvasEl.scrollTop;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        isSyncingVertical.current = null;
+      });
+    };
+
+    const handleHeaderScroll = () => {
+      if (canvasEl && headerEl) {
+        canvasEl.scrollLeft = headerEl.scrollLeft;
+      }
+    };
+
+    tableEl.addEventListener('scroll', handleTableScroll, { passive: true });
+    canvasEl.addEventListener('scroll', handleCanvasScroll, { passive: true });
+    if (headerEl) {
+      headerEl.addEventListener('scroll', handleHeaderScroll, { passive: true });
+    }
+
+    return () => {
+      tableEl.removeEventListener('scroll', handleTableScroll);
+      canvasEl.removeEventListener('scroll', handleCanvasScroll);
+      if (headerEl) {
+        headerEl.removeEventListener('scroll', handleHeaderScroll);
+      }
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  // Splitter Arrastrable (Redimensión Tabla/Canvas)
   const onSplitMouseDown = (e) => {
     e.preventDefault();
     isDragging.current = true;
-    document.addEventListener('mousemove', onSplitMouseMove);
-    document.addEventListener('mouseup', onSplitMouseUp);
-    document.body.style.cursor = 'col-resize';
-  };
 
-  const onSplitMouseMove = (e) => {
-    if (!isDragging.current || !splitRef.current) return;
-    const rect = splitRef.current.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
-    if (pct >= 20 && pct <= 80) {
-      setLeftWidth(pct);
-    }
-  };
+    const onSplitMouseMove = (moveEvent) => {
+      if (!isDragging.current || !splitRef.current) return;
+      const rect = splitRef.current.getBoundingClientRect();
+      const pct = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      if (pct >= 20 && pct <= 80) {
+        setLeftWidth(pct);
+      }
+    };
 
-  const onSplitMouseUp = () => {
-    isDragging.current = false;
-    document.removeEventListener('mousemove', onSplitMouseMove);
-    document.removeEventListener('mouseup', onSplitMouseUp);
-    document.body.style.cursor = 'default';
-  };
+    const onSplitMouseUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', onSplitMouseMove);
+      window.removeEventListener('mouseup', onSplitMouseUp);
+    };
 
-  // Sincronización vertical y horizontal de scroll
-  const onTableScroll = (e) => {
-    if (syncFromRight.current) {
-      syncFromRight.current = false;
-      return;
-    }
-    syncFromLeft.current = true;
-    if (canvasScrollRef.current) {
-      canvasScrollRef.current.scrollTop = e.target.scrollTop;
-    }
-  };
-
-  const onCanvasScroll = (e) => {
-    if (headerScrollRef.current) {
-      headerScrollRef.current.scrollLeft = e.target.scrollLeft;
-    }
-    if (syncFromLeft.current) {
-      syncFromLeft.current = false;
-      return;
-    }
-    syncFromRight.current = true;
-    if (tableScrollRef.current) {
-      tableScrollRef.current.scrollTop = e.target.scrollTop;
-    }
+    window.addEventListener('mousemove', onSplitMouseMove);
+    window.addEventListener('mouseup', onSplitMouseUp);
   };
 
   // Botón Ir a Hoy
@@ -164,7 +193,6 @@ export const GanttView = () => {
         >
           <GanttTable
             tableRef={tableScrollRef}
-            onScroll={onTableScroll}
             visibleTasks={visibleTasks}
           />
         </div>
@@ -182,7 +210,6 @@ export const GanttView = () => {
         <GanttCanvas
           canvasScrollRef={canvasScrollRef}
           headerScrollRef={headerScrollRef}
-          onScroll={onCanvasScroll}
           visibleTasks={visibleTasks}
           minD={minD}
           tlDays={tlDays}
@@ -194,3 +221,4 @@ export const GanttView = () => {
     </div>
   );
 };
+

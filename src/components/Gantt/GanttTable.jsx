@@ -3,9 +3,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatD } from '../../lib/cpmEngine';
 
-export const GanttTable = ({ tableRef, onScroll, visibleTasks = [] }) => {
+export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
   const {
-    tasks,
     resources,
     cpmResult,
     updateTask,
@@ -33,7 +32,6 @@ export const GanttTable = ({ tableRef, onScroll, visibleTasks = [] }) => {
   return (
     <div
       ref={tableRef}
-      onScroll={onScroll}
       className="overflow-auto flex-1 h-full select-text bg-[#1e293b] custom-scrollbar"
     >
       <table className="gantt-table text-left text-xs mb-10 w-full">

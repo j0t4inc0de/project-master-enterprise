@@ -132,9 +132,9 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             onChange={(e) => setTaskFilter(e.target.value)}
             className="bg-slate-900 border border-slate-600 text-slate-300 text-[11px] rounded px-2 py-1 outline-none cursor-pointer focus:border-blue-500"
           >
-            <option value="ALL">📋 Estado: Todos</option>
-            <option value="CRITICAL">🔥 Partidas Críticas</option>
-            <option value="DELAYED">⚠️ Con Retraso</option>
+            <option value="ALL">Estado: Todos</option>
+            <option value="CRITICAL">Partidas Críticas</option>
+            <option value="DELAYED">Con Retraso</option>
           </select>
         </div>
       </div>
