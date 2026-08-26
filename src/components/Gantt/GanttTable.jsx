@@ -52,7 +52,28 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
         </colgroup>
 
         <thead className="bg-[#0f172a] sticky top-0 z-30 shadow-md">
-          {/* Fila Resumen Global de Proyecto (Color Ámbar Ignacio) */}
+          {/* Fila Encabezados de Columna (Limpia y 100% Visible) */}
+          <tr className="text-slate-300 font-bold bg-slate-800 h-[56px] text-[10px] border-b border-slate-700">
+            <th className="text-center">
+              <i className="fa-solid fa-wrench text-blue-400"></i> Edición
+            </th>
+            <th className="px-2">Descripción de la Partida</th>
+            <th className="px-2 text-center">Dur.</th>
+            <th className="px-2 text-center">Holg.</th>
+            <th className="px-2">Inicio (ES)</th>
+            <th className="px-2">Fin (EF)</th>
+            <th className="px-1 text-center">Pred.</th>
+            <th className="px-1 text-center">Pos.In</th>
+            <th className="px-1 text-center">Pos.Fin</th>
+            <th className="px-2 text-center">Recurso</th>
+            <th className="px-2 text-center">Estado</th>
+            <th className="px-2 text-center">% Av</th>
+            <th className="px-2 text-right">Costo ($)</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {/* Fila Resumen Global de Proyecto (Fila 0 de la Tabla) */}
           <tr className="bg-amber-500 text-slate-900 font-bold border-b border-amber-700 h-[32px]">
             <td className="text-center px-1 border-r border-amber-600/50">
               <i className="fa-solid fa-chart-line"></i>
@@ -80,28 +101,6 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
               Σ ${(pSum.cost || 0).toLocaleString()}
             </td>
           </tr>
-
-          {/* Fila Encabezados de Columna */}
-          <tr className="text-slate-300 font-bold bg-slate-800 h-[32px] text-[10px] border-b border-slate-700">
-            <th className="text-center">
-              <i className="fa-solid fa-wrench text-blue-400"></i> Edición
-            </th>
-            <th className="px-2">Descripción de la Partida</th>
-            <th className="px-2 text-center">Dur.</th>
-            <th className="px-2 text-center">Holg.</th>
-            <th className="px-2">Inicio (ES)</th>
-            <th className="px-2">Fin (EF)</th>
-            <th className="px-1 text-center">Pred.</th>
-            <th className="px-1 text-center">Pos.In</th>
-            <th className="px-1 text-center">Pos.Fin</th>
-            <th className="px-2 text-center">Recurso</th>
-            <th className="px-2 text-center">Estado</th>
-            <th className="px-2 text-center">% Av</th>
-            <th className="px-2 text-right">Costo ($)</th>
-          </tr>
-        </thead>
-
-        <tbody>
           {visibleTasks.map((t) => {
             const isMilestone = t.duration === 0 && !t.isP;
             const statusStyle = getTaskStatusStyle(t);

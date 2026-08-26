@@ -1,7 +1,16 @@
 import React, { useMemo } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
-import { isWorkDay, toHolidaySet } from '../../lib/cpmEngine';
+import { isWorkDay } from '../../lib/cpmEngine';
+
+const toHolidaySet = (holidays) => {
+  if (!holidays || holidays.length === 0) return new Set();
+  const set = new Set();
+  for (let i = 0; i < holidays.length; i++) {
+    if (holidays[i] && holidays[i].date) set.add(holidays[i].date);
+  }
+  return set;
+};
 
 export const GanttCanvas = ({
   canvasScrollRef,
@@ -13,6 +22,7 @@ export const GanttCanvas = ({
   const { resources, startDate, statusDate, workingDays, holidays, cpmResult } = useProjectStore();
   const { zoom, showLinks } = useUIStore();
 
+  const { pSum = {} } = cpmResult;
   const totalWidth = tlDays.length * zoom;
   const minTime = minD ? minD.getTime() : 0;
 
@@ -36,7 +46,7 @@ export const GanttCanvas = ({
     return Math.max(0, (stTime - minTime) / (1000 * 3600 * 24)) * zoom;
   }, [statusDate, minTime, zoom]);
 
-  // Barra de resumen global del proyecto en cabecera
+  // Barra de resumen global del proyecto
   const globalSummaryBar = useMemo(() => {
     if (!cpmResult.end || !minTime) return null;
     const sT = new Date(startDate + 'T00:00:00').getTime();
@@ -118,8 +128,9 @@ export const GanttCanvas = ({
           ) * zoom;
         const startPx = Math.max(0, (cStart - minTime) / (1000 * 3600 * 24)) * zoom;
 
-        const pY = pIdx * 32 + 16;
-        const cY = idx * 32 + 16;
+        // +1 por la fila 0 de Resumen Global
+        const pY = (pIdx + 1) * 32 + 16;
+        const cY = (idx + 1) * 32 + 16;
 
         const d =
           startPx >= endPx + 10
@@ -142,28 +153,15 @@ export const GanttCanvas = ({
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col bg-[#0f172a] z-10 relative">
-      {/* 1. Encabezado de la Línea de Tiempo */}
+      {/* 1. Encabezado de la Línea de Tiempo (Limpio, 56px de alto, 100% visible) */}
       <div
         ref={headerScrollRef}
         className="bg-[#1e293b] border-b border-slate-700 shrink-0 overflow-hidden"
-        style={{ height: '64px' }}
+        style={{ height: '56px' }}
       >
         <div style={{ width: `${totalWidth}px` }} className="flex flex-col h-full">
-          {/* Barra Resumen Global en Gantt Header */}
-          <div className="h-[32px] bg-amber-500 border-b border-amber-700 relative box-border">
-            {globalSummaryBar && (
-              <div
-                className="absolute top-2 h-3.5 bg-slate-800 rounded shadow"
-                style={{
-                  left: `${globalSummaryBar.left}px`,
-                  width: `${globalSummaryBar.width}px`,
-                }}
-              ></div>
-            )}
-          </div>
-
-          {/* Fila de Meses */}
-          <div className="h-[16px] flex bg-slate-800 border-b border-slate-700 box-border text-[9px] font-bold text-slate-300">
+          {/* Fila de Meses (28px) */}
+          <div className="h-[28px] flex bg-slate-800 border-b border-slate-700 box-border text-[11px] font-bold text-slate-300">
             {monthGroups.map((g, i) => (
               <div
                 key={i}
@@ -175,17 +173,17 @@ export const GanttCanvas = ({
             ))}
           </div>
 
-          {/* Fila de Días */}
-          <div className="h-[16px] flex bg-slate-900 box-border">
+          {/* Fila de Días (28px) */}
+          <div className="h-[28px] flex bg-slate-900 box-border">
             {dayItems.map((d, i) => (
               <div
                 key={i}
-                className={`border-r border-slate-800 flex flex-col items-center justify-center text-[8px] font-bold shrink-0 ${
+                className={`border-r border-slate-800 flex flex-col items-center justify-center text-[9px] font-bold shrink-0 ${
                   !d.isWork ? 'bg-rose-900/20 text-rose-500' : 'text-slate-400'
                 }`}
                 style={{ width: `${zoom}px` }}
               >
-                {zoom > 18 ? <span>{d.date}</span> : null}
+                {zoom > 16 ? <span>{d.date}</span> : null}
               </div>
             ))}
           </div>
@@ -201,7 +199,7 @@ export const GanttCanvas = ({
           className="relative pb-10"
           style={{
             width: `${totalWidth}px`,
-            minHeight: `${visibleTasks.length * 32 + 50}px`,
+            minHeight: `${(visibleTasks.length + 1) * 32 + 50}px`,
           }}
         >
           {/* Capa SVG de Flechas de Precedencia */}
@@ -269,6 +267,26 @@ export const GanttCanvas = ({
 
           {/* Capa de Barras y Elementos Visuales */}
           <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
+            {/* Fila 0: Barra Resumen Global del Proyecto */}
+            <div className="relative w-full border-b border-amber-700/60 bg-amber-500/10 h-[32px] pointer-events-auto flex items-center">
+              {globalSummaryBar && (
+                <div
+                  className="absolute h-3.5 bg-slate-800 border border-amber-600/60 rounded shadow-md flex items-center overflow-hidden"
+                  style={{
+                    left: `${globalSummaryBar.left}px`,
+                    width: `${globalSummaryBar.width}px`,
+                  }}
+                  title={`Resumen Global: ${startDate} al ${cpmResult.end}`}
+                >
+                  <div
+                    className="h-full bg-amber-500/70"
+                    style={{ width: `${pSum.prog || 0}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+
+            {/* Filas 1..N: Tareas del Proyecto */}
             {visibleTasks.map((t) => {
               const sT = new Date(t.ES + 'T00:00:00').getTime();
               const eT = new Date(t.EF + 'T00:00:00').getTime();
@@ -346,4 +364,3 @@ export const GanttCanvas = ({
     </div>
   );
 };
-
