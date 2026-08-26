@@ -136,7 +136,7 @@ export const ProjectsSidebar = () => {
             className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-1.5 px-2.5 rounded-md border border-slate-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
             <i className="fa-solid fa-folder-open text-amber-400 text-[10px]"></i>
-            <span>Abrir .json</span>
+            <span>Abrir</span>
           </button>
         </div>
 
