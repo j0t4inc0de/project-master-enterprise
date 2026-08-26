@@ -58,26 +58,44 @@ export const GanttView = () => {
     return res;
   }, [cpmResult.tasks, searchQuery, taskFilter, collapsed]);
 
-  // Cálculo de rango de fechas del timeline
+  // Cálculo de rango de fechas del timeline (alineado a la semana de inicio para visibilidad inmediata)
   const { minD, tlDays } = useMemo(() => {
     let s = new Date(startDate + 'T00:00:00');
     if (isNaN(s.getTime())) s = new Date();
-    s = new Date(s.getFullYear(), s.getMonth(), 1);
 
+    // Si hay tareas con fecha más temprana, tomar la fecha más temprana
+    if (visibleTasks && visibleTasks.length > 0) {
+      const taskStarts = visibleTasks
+        .map((t) => t.ES || t.startDate)
+        .filter(Boolean)
+        .map((dStr) => new Date(dStr + 'T00:00:00').getTime())
+        .filter((t) => !isNaN(t));
+      if (taskStarts.length > 0) {
+        const minTaskStart = new Date(Math.min(...taskStarts));
+        if (minTaskStart < s) s = minTaskStart;
+      }
+    }
+
+    // Comenzar el lunes de la semana de la primera tarea (con margen limpio)
+    const dayOfWeek = s.getDay(); // 0: Dom, 1: Lun...
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    s.setDate(s.getDate() - diffToMonday);
+
+    // Margen final de 25 días para extender la planificación
     let e = new Date((cpmResult.end || startDate) + 'T00:00:00');
-    if (isNaN(e.getTime())) e = new Date();
-    e.setDate(e.getDate() + 15);
+    if (isNaN(e.getTime())) e = new Date(s);
+    e.setDate(e.getDate() + 25);
 
     const arr = [];
     let count = Math.ceil((e - s) / (1000 * 3600 * 24));
-    if (isNaN(count) || count < 0 || count > 3000) count = 100;
+    if (isNaN(count) || count < 0 || count > 3000) count = 60;
     for (let i = 0; i <= count; i++) {
       const d = new Date(s);
       d.setDate(d.getDate() + i);
       arr.push(d);
     }
     return { minD: s, tlDays: arr };
-  }, [startDate, cpmResult.end]);
+  }, [startDate, cpmResult.end, visibleTasks]);
 
   // Sincronización de Scroll vertical y horizontal a 60 FPS mediante Refs y Event Listeners Pasivos
   useEffect(() => {
