@@ -159,20 +159,25 @@ export const ScurveView = () => {
                   </span>
                 </div>
               )}
-              {scurveData[hoverScurve].evVal !== null && (
-                <div className="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center">
-                  <span className="text-slate-400 font-bold text-xs uppercase">SPI (Punto)</span>
-                  <span
-                    className={`px-2 py-0.5 rounded font-black text-xs ${
-                      scurveData[hoverScurve].evVal / (scurveData[hoverScurve].pvVal || 1) >= 1
-                        ? 'bg-emerald-900/50 text-emerald-400'
-                        : 'bg-rose-900/50 text-rose-400'
-                    }`}
-                  >
-                    {(scurveData[hoverScurve].evVal / (scurveData[hoverScurve].pvVal || 1)).toFixed(2)}
-                  </span>
-                </div>
-              )}
+              {scurveData[hoverScurve].evVal !== null && (() => {
+                const ptPv = Number(scurveData[hoverScurve].pvVal) || 0;
+                const ptEv = Number(scurveData[hoverScurve].evVal) || 0;
+                const ptSpi = ptPv > 0 ? ptEv / ptPv : (ptEv > 0 ? 1 : 1);
+                return (
+                  <div className="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center">
+                    <span className="text-slate-400 font-bold text-xs uppercase">SPI (Punto)</span>
+                    <span
+                      className={`px-2 py-0.5 rounded font-black text-xs ${
+                        ptSpi >= 1
+                          ? 'bg-emerald-900/50 text-emerald-400'
+                          : 'bg-rose-900/50 text-rose-400'
+                      }`}
+                    >
+                      {ptSpi.toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

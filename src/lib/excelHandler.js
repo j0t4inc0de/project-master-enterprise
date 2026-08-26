@@ -157,12 +157,19 @@ const getCellValueAsString = (cell) => {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return v.toISOString().split('T')[0];
+  }
   if (typeof v === 'object') {
+    if (v.error) return '';
     if (Array.isArray(v.richText)) {
       return v.richText.map((t) => t.text || '').join('');
     }
     if (v.result !== undefined && v.result !== null) {
-      return String(v.result);
+      if (v.result instanceof Date && !isNaN(v.result.getTime())) {
+        return v.result.toISOString().split('T')[0];
+      }
+      return typeof v.result === 'object' ? '' : String(v.result);
     }
     if (v.text) return String(v.text);
   }
@@ -173,11 +180,42 @@ const getCellValueAsNumber = (cell, defaultVal = 0) => {
   if (!cell) return defaultVal;
   const v = cell.value;
   if (typeof v === 'number') return isNaN(v) ? defaultVal : v;
+  if (typeof v === 'object' && v !== null) {
+    if (v.error) return defaultVal;
+    if (v.result !== undefined && v.result !== null) {
+      if (typeof v.result === 'number') return isNaN(v.result) ? defaultVal : v.result;
+      const resStr = String(v.result).replace(/[^0-9.-]+/g, '');
+      if (resStr) {
+        const num = Number(resStr);
+        return isNaN(num) ? defaultVal : num;
+      }
+    }
+  }
   const str = getCellValueAsString(cell);
   const clean = str.replace(/[^0-9.-]+/g, '');
   if (!clean) return defaultVal;
   const num = Number(clean);
   return isNaN(num) ? defaultVal : num;
+};
+
+const parseDateString = (rawStr, defaultDate = '2026-06-01') => {
+  if (!rawStr || rawStr === '-' || rawStr === 'N/A') return defaultDate;
+  const s = rawStr.trim();
+  // YYYY-MM-DD o YYYY/MM/DD
+  const m1 = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (m1) {
+    return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`;
+  }
+  // DD-MM-YYYY o DD/MM/YYYY
+  const m2 = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m2) {
+    return `${m2[3]}-${m2[2].padStart(2, '0')}-${m2[1].padStart(2, '0')}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return defaultDate;
 };
 
 /**
@@ -370,6 +408,7 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
   }
 
   const parsedTasks = [];
+  const rawIdToNewId = new Map();
   let currentId = 1;
 
   taskWorksheet.eachRow((row, rowNumber) => {
@@ -393,6 +432,13 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
     const rawProgress = headerMap['progress'] ? getCellValueAsNumber(row.getCell(headerMap['progress']), 0) : 0;
     const progressVal = rawProgress <= 1 && rawProgress > 0 ? Math.round(rawProgress * 100) : Math.min(100, Math.max(0, rawProgress || 0));
 
+    // Fecha de Inicio
+    let taskStartDate = defaultStartDate;
+    if (headerMap['startDate']) {
+      const cellDateStr = getCellValueAsString(row.getCell(headerMap['startDate']));
+      taskStartDate = parseDateString(cellDateStr, defaultStartDate);
+    }
+
     const predsVal = headerMap['predecessors'] ? getCellValueAsString(row.getCell(headerMap['predecessors'])).trim() : '';
 
     // Vincular recurso asignado si existe en parsedResources
@@ -400,7 +446,6 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
     if (headerMap['resource']) {
       const rawRes = getCellValueAsString(row.getCell(headerMap['resource'])).trim();
       if (rawRes && rawRes !== 'N/A' && rawRes !== '-') {
-        // Intentar match con parsedResources por ID, iniciales o nombre
         const matched = parsedResources.find(
           (r) =>
             String(r.id) === rawRes ||
@@ -420,25 +465,45 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
     const rawStatus = headerMap['manualStatus'] ? getCellValueAsString(row.getCell(headerMap['manualStatus'])).trim() : 'AUTO';
     const manualStatus = ['Completada', 'Con Retraso', 'En Plazo', 'Pendiente'].includes(rawStatus) ? rawStatus : 'AUTO';
 
+    const rawId = headerMap['id'] ? getCellValueAsNumber(row.getCell(headerMap['id']), null) : null;
+    const assignedId = currentId++;
+    if (rawId !== null) {
+      rawIdToNewId.set(String(rawId), String(assignedId));
+    }
+
     parsedTasks.push({
-      id: currentId++,
+      id: assignedId,
       name: rawName.trim(),
       duration: isNaN(rawDuration) ? 1 : Math.max(0, rawDuration),
-      startDate: defaultStartDate,
+      startDate: taskStartDate,
       progress: progressVal,
       cost: isNaN(rawCost) ? 0 : rawCost,
       predecessors: predsVal,
       startDelay: headerMap['startDelay'] ? getCellValueAsNumber(row.getCell(headerMap['startDelay']), 0) : 0,
       finishDelay: headerMap['finishDelay'] ? getCellValueAsNumber(row.getCell(headerMap['finishDelay']), 0) : 0,
       resourceId: assignedResourceId,
-      level: Math.max(1, Math.min(4, level)),
-      manualStart: '',
+      level: Math.max(1, Math.min(5, level)),
+      manualStart: taskStartDate !== defaultStartDate ? taskStartDate : '',
       manualStatus,
     });
   });
 
   if (parsedTasks.length === 0) {
     throw new Error('No se encontraron filas con partidas válidas en el archivo.');
+  }
+
+  // Remapear predecesores si los IDs del Excel diferían de los asignados
+  if (rawIdToNewId.size > 0) {
+    parsedTasks.forEach((t) => {
+      if (t.predecessors) {
+        const remapped = String(t.predecessors)
+          .split(',')
+          .map((p) => p.trim())
+          .map((p) => rawIdToNewId.get(p) || p)
+          .join(', ');
+        t.predecessors = remapped;
+      }
+    });
   }
 
   return {

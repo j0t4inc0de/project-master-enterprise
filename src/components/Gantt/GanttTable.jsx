@@ -286,7 +286,6 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                   ) : (
                     <input
                       type="number"
-                      min="0"
                       value={t.startDelay || 0}
                       onChange={(e) => updateTask(t.id, 'startDelay', e.target.value)}
                       className="table-input text-center w-full"
@@ -301,7 +300,6 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                   ) : (
                     <input
                       type="number"
-                      min="0"
                       value={t.finishDelay || 0}
                       onChange={(e) => updateTask(t.id, 'finishDelay', e.target.value)}
                       className="table-input text-center w-full"
@@ -361,14 +359,14 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                 <td className="px-1">
                   {t.isP ? (
                     <span className="block text-center font-bold text-amber-300">
-                      Σ {t.progress.toFixed(0)}%
+                      Σ {(Number(t.progress) || 0).toFixed(0)}%
                     </span>
                   ) : (
                     <input
                       type="number"
                       min="0"
                       max="100"
-                      value={t.progress}
+                      value={t.progress ?? 0}
                       onChange={(e) => updateTask(t.id, 'progress', e.target.value)}
                       className="table-input text-center text-emerald-400 font-bold w-full"
                     />
@@ -379,7 +377,7 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                 <td className="px-1">
                   {t.isP ? (
                     <span className="block text-right pr-1 font-bold text-amber-300">
-                      ${(t.cost || 0).toLocaleString()}
+                      ${(Number(t.cost) || 0).toLocaleString()}
                     </span>
                   ) : (
                     <div className="flex items-center">
@@ -387,7 +385,7 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                       <input
                         type="number"
                         min="0"
-                        value={t.cost || 0}
+                        value={t.cost ?? 0}
                         onChange={(e) => updateTask(t.id, 'cost', e.target.value)}
                         className="table-input text-right w-full font-medium"
                       />

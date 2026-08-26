@@ -31,12 +31,36 @@ export const ProjectsSidebar = () => {
 
   const currentProjectName = (projectName || 'Nuevo Proyecto').trim().toLowerCase();
   const currentSaved = savedProjects.find(
-    (p) => p.name.trim().toLowerCase() === currentProjectName
+    (p) => (p.name || '').trim().toLowerCase() === currentProjectName
   );
-  const isCurrentFavorite = currentSaved ? currentSaved.isFavorite : false;
+  const isCurrentFavorite = currentSaved ? Boolean(currentSaved.isFavorite) : false;
 
-  const favorites = savedProjects.filter((p) => p.isFavorite);
-  const recents = savedProjects.filter((p) => !p.isFavorite);
+  // Favoritos únicos por nombre normalizado
+  const favSeen = new Set();
+  const favorites = [];
+  for (const p of savedProjects) {
+    if (p && p.isFavorite) {
+      const norm = (p.name || '').trim().toLowerCase();
+      if (norm && !favSeen.has(norm)) {
+        favSeen.add(norm);
+        favorites.push(p);
+      }
+    }
+  }
+
+  // Recientes: proyectos no favoritos, estrictamente únicos por nombre normalizado, máximo 4 (MRU)
+  const recentSeen = new Set();
+  const uniqueRecents = [];
+  for (const p of savedProjects) {
+    if (p && !p.isFavorite) {
+      const norm = (p.name || '').trim().toLowerCase();
+      if (norm && !recentSeen.has(norm)) {
+        recentSeen.add(norm);
+        uniqueRecents.push(p);
+      }
+    }
+  }
+  const recents = uniqueRecents.slice(0, 4);
 
   const handleOpenJson = async () => {
     try {
@@ -174,14 +198,7 @@ export const ProjectsSidebar = () => {
                     if (currentSaved) {
                       toggleFavoriteProject(currentSaved.id);
                     } else {
-                      useProjectStore.getState().recalc({}, false);
-                      setTimeout(() => {
-                        const list = useProjectStore.getState().savedProjects;
-                        const curr = list.find(
-                          (p) => p.name.trim().toLowerCase() === currentProjectName
-                        );
-                        if (curr) toggleFavoriteProject(curr.id);
-                      }, 50);
+                      useProjectStore.getState().toggleCurrentFavorite();
                     }
                   }}
                   title={isCurrentFavorite ? 'Quitar de Favoritos' : 'Anclar a Favoritos'}

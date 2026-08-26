@@ -92,8 +92,29 @@ export const ExcelModal = ({ isOpen, onClose }) => {
         );
       } else {
         const currentTasks = tasks;
-        const offsetId = Math.max(...currentTasks.map((x) => x.id), 0);
-        const renumbered = importedTasks.map((t, idx) => ({ ...t, id: offsetId + idx + 1 }));
+        const offsetId = Math.max(...currentTasks.map((x) => Number(x.id) || 0), 0);
+        const appendIdMap = new Map();
+        importedTasks.forEach((t, idx) => {
+          appendIdMap.set(String(t.id), String(offsetId + idx + 1));
+        });
+
+        const renumbered = importedTasks.map((t, idx) => {
+          const newId = offsetId + idx + 1;
+          let remappedPreds = t.predecessors;
+          if (remappedPreds) {
+            remappedPreds = String(remappedPreds)
+              .split(',')
+              .map((p) => p.trim())
+              .map((p) => appendIdMap.get(p) || p)
+              .join(', ');
+          }
+          return {
+            ...t,
+            id: newId,
+            predecessors: remappedPreds,
+          };
+        });
+
         setTasks([...currentTasks, ...renumbered]);
         setSuccessMsg(
           `Se anexaron ${renumbered.length} nuevas partidas${

@@ -2,22 +2,60 @@ import React, { useState } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 
 export const CalendarView = () => {
-  const { workingDays, setWorkingDays, holidays, addHoliday, deleteHoliday } = useProjectStore();
+  const { workingDays = {}, setWorkingDays, holidays = [], addHoliday, deleteHoliday } = useProjectStore();
   const [date, setDate] = useState('');
   const [name, setName] = useState('');
+  const [error, setError] = useState('');
 
   const handleRegisterHoliday = (e) => {
     e.preventDefault();
+    setError('');
     if (!date || !name.trim()) return;
+    if (holidays.some((h) => h.date === date)) {
+      setError('Ya existe un feriado o excepción registrado en esta fecha.');
+      return;
+    }
     addHoliday({ date, name: name.trim() });
     setDate('');
     setName('');
   };
 
   const isMonFri =
-    workingDays[1] && workingDays[2] && workingDays[3] && workingDays[4] && workingDays[5] && !workingDays[6] && !workingDays[0];
+    workingDays[1] &&
+    workingDays[2] &&
+    workingDays[3] &&
+    workingDays[4] &&
+    workingDays[5] &&
+    !workingDays[6] &&
+    !workingDays[0];
   const isMonSat =
-    workingDays[1] && workingDays[2] && workingDays[3] && workingDays[4] && workingDays[5] && workingDays[6] && !workingDays[0];
+    workingDays[1] &&
+    workingDays[2] &&
+    workingDays[3] &&
+    workingDays[4] &&
+    workingDays[5] &&
+    workingDays[6] &&
+    !workingDays[0];
+
+  const daysConfig = [
+    { key: 1, label: 'Lun' },
+    { key: 2, label: 'Mar' },
+    { key: 3, label: 'Mié' },
+    { key: 4, label: 'Jue' },
+    { key: 5, label: 'Vie' },
+    { key: 6, label: 'Sáb' },
+    { key: 0, label: 'Dom' },
+  ];
+
+  const handleToggleDay = (dayKey) => {
+    const updated = { ...workingDays, [dayKey]: !workingDays[dayKey] };
+    const hasAtLeastOne = Object.values(updated).some(Boolean);
+    if (!hasAtLeastOne) {
+      alert('Debe haber al menos un día laboral habilitado en la semana.');
+      return;
+    }
+    setWorkingDays(updated);
+  };
 
   return (
     <div className="p-8 h-full overflow-auto bg-[#09090b] custom-scrollbar">
@@ -31,7 +69,7 @@ export const CalendarView = () => {
         </p>
 
         {/* Presets de Jornada Laboral */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex gap-4 mb-4">
           <button
             onClick={() =>
               setWorkingDays({ 1: true, 2: true, 3: true, 4: true, 5: true, 6: false, 0: false })
@@ -57,6 +95,40 @@ export const CalendarView = () => {
             <i className="fa-solid fa-helmet-safety"></i> Jornada Lunes a Sábado (Construcción)
           </button>
         </div>
+
+        {/* Selector Individual de Días Laborales */}
+        <div className="bg-slate-900/60 p-3.5 rounded-lg border border-slate-800 mb-8">
+          <span className="text-[11px] font-bold text-slate-400 block mb-2">
+            Días Laborales Activos en la Semana:
+          </span>
+          <div className="grid grid-cols-7 gap-2">
+            {daysConfig.map((d) => {
+              const active = !!workingDays[d.key];
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  onClick={() => handleToggleDay(d.key)}
+                  className={`py-2 rounded text-xs font-bold transition-all border ${
+                    active
+                      ? 'bg-emerald-600/80 border-emerald-500 text-white shadow-sm'
+                      : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Mensaje de Error si aplica */}
+        {error && (
+          <div className="bg-rose-950/60 border border-rose-600 text-rose-300 text-xs p-3 rounded-lg mb-4 flex items-center gap-2">
+            <i className="fa-solid fa-triangle-exclamation"></i>
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Formulario de Registro de Feriados */}
         <form onSubmit={handleRegisterHoliday} className="flex flex-wrap gap-3 mb-8 border-t border-slate-700 pt-6">

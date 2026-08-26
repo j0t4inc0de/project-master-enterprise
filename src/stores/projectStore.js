@@ -28,12 +28,29 @@ const createSnapshot = (state) => ({
   autoProgress: state.autoProgress ?? false,
 });
 
+const normalizeProjectName = (name) => (name ? String(name).trim().toLowerCase() : '');
+
+const deduplicateProjectsList = (list) => {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const item of list) {
+    if (!item || !item.name) continue;
+    const norm = normalizeProjectName(item.name);
+    if (norm && !seen.has(norm)) {
+      seen.add(norm);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
 const loadSavedProjectsList = () => {
   try {
     const raw = localStorage.getItem(SAVED_PROJECTS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return deduplicateProjectsList(parsed);
     }
   } catch (e) {
     console.error('Error al cargar lista de proyectos:', e);
@@ -43,7 +60,7 @@ const loadSavedProjectsList = () => {
 
 const saveProjectsListToStorage = (list) => {
   try {
-    localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(list));
+    localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(deduplicateProjectsList(list)));
   } catch (e) {
     console.error('Error al guardar lista de proyectos:', e);
   }
@@ -138,19 +155,22 @@ export const useProjectStore = create((set, get) => ({
       autoProgress: current.autoProgress,
     });
 
-    // Actualizar lista de proyectos recientes/guardados
+    // Actualizar lista de proyectos recientes/guardados (MRU / Most Recently Used)
     const savedList = loadSavedProjectsList();
-    const currentName = current.projectName || 'Nuevo Proyecto';
+    const currentName = (current.projectName || 'Nuevo Proyecto').trim();
+    const normName = normalizeProjectName(currentName);
     const now = new Date().toISOString();
     const taskCount = (current.tasks || []).length;
     const totalCost = cpmResult?.pSum?.cost || 0;
 
+    const existingEntry = savedList.find((p) => normalizeProjectName(p.name) === normName);
+    const filteredList = savedList.filter((p) => normalizeProjectName(p.name) !== normName);
+
     let updatedList;
-    const existingIdx = savedList.findIndex((p) => p.name.trim().toLowerCase() === currentName.trim().toLowerCase());
-    if (existingIdx >= 0) {
-      const isFav = savedList[existingIdx].isFavorite || false;
-      savedList[existingIdx] = {
-        ...savedList[existingIdx],
+    if (existingEntry || taskCount > 0) {
+      const isFav = existingEntry ? (existingEntry.isFavorite || false) : false;
+      const updatedEntry = {
+        id: existingEntry ? existingEntry.id : `p_${Date.now()}`,
         name: currentName,
         isFavorite: isFav,
         updatedAt: now,
@@ -166,28 +186,10 @@ export const useProjectStore = create((set, get) => ({
           workingDays: clone(current.workingDays),
         },
       };
-      updatedList = [...savedList];
-    } else if (taskCount > 0) {
-      const newEntry = {
-        id: `p_${Date.now()}`,
-        name: currentName,
-        isFavorite: false,
-        updatedAt: now,
-        taskCount,
-        totalCost,
-        data: {
-          projectName: currentName,
-          tasks: clone(current.tasks),
-          resources: clone(current.resources),
-          holidays: clone(current.holidays),
-          startDate: current.startDate,
-          statusDate: current.statusDate,
-          workingDays: clone(current.workingDays),
-        },
-      };
-      updatedList = [newEntry, ...savedList].slice(0, 15);
+      // Colocar siempre al inicio (índice 0) garantizando MRU y unicidad absoluta
+      updatedList = [updatedEntry, ...filteredList].slice(0, 20);
     } else {
-      updatedList = savedList;
+      updatedList = filteredList;
     }
     saveProjectsListToStorage(updatedList);
 
@@ -303,8 +305,14 @@ export const useProjectStore = create((set, get) => ({
 
   toggleCurrentFavorite: () => {
     const { projectName } = get();
-    const list = loadSavedProjectsList();
-    const existing = list.find((p) => p.name.trim().toLowerCase() === projectName.trim().toLowerCase());
+    const norm = normalizeProjectName(projectName || 'Nuevo Proyecto');
+    let list = loadSavedProjectsList();
+    let existing = list.find((p) => normalizeProjectName(p.name) === norm);
+    if (!existing) {
+      get().recalc({}, false);
+      list = get().savedProjects;
+      existing = list.find((p) => normalizeProjectName(p.name) === norm);
+    }
     if (existing) {
       get().toggleFavoriteProject(existing.id);
     }
@@ -351,15 +359,14 @@ export const useProjectStore = create((set, get) => ({
   setTasks: (tasks) => get().recalc({ tasks }),
 
   updateTask: (id, field, value) => {
-    const parsedVal = ['duration', 'startDelay', 'finishDelay'].includes(field)
-      ? value === ''
-        ? ''
-        : Math.max(0, parseInt(value))
-      : field === 'cost' || field === 'progress'
-      ? isNaN(Number(value))
-        ? 0
-        : Number(value)
-      : value;
+    let parsedVal = value;
+    if (['duration', 'startDelay', 'finishDelay'].includes(field)) {
+      parsedVal = value === '' ? '' : Math.max(0, parseInt(value) || 0);
+    } else if (field === 'cost') {
+      parsedVal = value === '' ? 0 : Math.max(0, Number(value) || 0);
+    } else if (field === 'progress') {
+      parsedVal = value === '' ? 0 : Math.min(100, Math.max(0, Number(value) || 0));
+    }
 
     const newTasks = get().tasks.map((t) => (t.id === id ? { ...t, [field]: parsedVal } : t));
     get().recalc({ tasks: newTasks });
@@ -367,7 +374,7 @@ export const useProjectStore = create((set, get) => ({
 
   addTask: (autoLink = true) => {
     const { tasks, startDate } = get();
-    const newId = Math.max(...tasks.map((x) => x.id), 0) + 1;
+    const newId = Math.max(...tasks.map((x) => Number(x.id) || 0), 0) + 1;
     const prevTask = tasks[tasks.length - 1];
     const newPred = autoLink && prevTask ? String(prevTask.id) : '';
 
@@ -396,7 +403,7 @@ export const useProjectStore = create((set, get) => ({
     if (idx === -1) return;
 
     const target = tasks[idx];
-    const newId = Math.max(...tasks.map((x) => x.id), 0) + 1;
+    const newId = Math.max(...tasks.map((x) => Number(x.id) || 0), 0) + 1;
     let newLevel = target.level;
     let newPred = '';
     let insertIdx = idx + 1;
@@ -422,7 +429,7 @@ export const useProjectStore = create((set, get) => ({
       startDelay: 0,
       finishDelay: 0,
       resourceId: '',
-      level: newLevel,
+      level: Math.max(1, Math.min(5, newLevel)),
       manualStart: '',
       manualStatus: 'AUTO',
     });
@@ -431,7 +438,18 @@ export const useProjectStore = create((set, get) => ({
   },
 
   deleteTask: (id) => {
-    const newTasks = get().tasks.filter((x) => x.id !== id);
+    const deletedIdStr = String(id);
+    const newTasks = get()
+      .tasks.filter((x) => x.id !== id)
+      .map((t) => {
+        if (!t.predecessors) return t;
+        const cleanedPreds = String(t.predecessors)
+          .split(',')
+          .map((p) => p.trim())
+          .filter((p) => p !== deletedIdStr && p !== '')
+          .join(', ');
+        return { ...t, predecessors: cleanedPreds };
+      });
     get().recalc({ tasks: newTasks });
   },
 
@@ -474,7 +492,7 @@ export const useProjectStore = create((set, get) => ({
 
   addResource: () => {
     const { resources } = get();
-    const newId = Math.max(...resources.map((r) => r.id), 0) + 1;
+    const newId = Math.max(...resources.map((r) => Number(r.id) || 0), 0) + 1;
     const newRes = {
       id: newId,
       name: 'Nuevo Recurso',

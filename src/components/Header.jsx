@@ -49,6 +49,7 @@ export const Header = () => {
         statusDate,
         workingDays,
       });
+      useProjectStore.getState().recalc({}, false);
     } catch (err) {
       alert('Error al guardar el proyecto: ' + err.message);
     } finally {

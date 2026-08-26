@@ -25,7 +25,7 @@ export const DashboardView = () => {
           <div className="bg-[#1e293b] border border-slate-700 p-5 rounded-lg shadow-md border-l-4 border-l-blue-500">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Duración (EAC)</p>
             <p className="text-3xl font-black text-white mt-1">
-              {pSum.dur || 0} <span className="text-xs font-semibold text-slate-500">días</span>
+              {Number(pSum.dur) || 0} <span className="text-xs font-semibold text-slate-500">días</span>
             </p>
           </div>
 
@@ -33,7 +33,7 @@ export const DashboardView = () => {
           <div className="bg-[#1e293b] border border-slate-700 p-5 rounded-lg shadow-md border-l-4 border-l-amber-500">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Presupuesto (BAC)</p>
             <p className="text-3xl font-black text-amber-400 mt-1">
-              ${(pSum.cost || 0).toLocaleString()}
+              ${(Number(pSum.cost) || 0).toLocaleString()}
             </p>
           </div>
 
@@ -41,14 +41,14 @@ export const DashboardView = () => {
           <div className="bg-[#1e293b] border border-slate-700 p-5 rounded-lg shadow-md border-l-4 border-l-emerald-500">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Progreso Físico</p>
             <p className="text-3xl font-black text-white mt-1">
-              {(pSum.prog || 0).toFixed(1)}%
+              {(Number(pSum.prog) || 0).toFixed(1)}%
             </p>
           </div>
 
           {/* SPI (Schedule Performance Index) */}
           <div
             className={`border p-5 rounded-lg shadow-md border-l-4 ${
-              (evm.spi || 1) >= 1
+              (Number(evm.spi) || 1) >= 1
                 ? 'bg-[#1e293b] border-slate-700 border-l-emerald-500'
                 : 'bg-rose-950/20 border-rose-900 border-l-rose-500'
             }`}
@@ -56,17 +56,17 @@ export const DashboardView = () => {
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Desempeño Crono (SPI)</p>
             <p
               className={`text-3xl font-black mt-1 ${
-                (evm.spi || 1) >= 1 ? 'text-emerald-400' : 'text-rose-500'
+                (Number(evm.spi) || 1) >= 1 ? 'text-emerald-400' : 'text-rose-500'
               }`}
             >
-              {(evm.spi || 1).toFixed(2)}
+              {(Number(evm.spi) || 1).toFixed(2)}
             </p>
           </div>
 
           {/* SV (Schedule Variance) */}
           <div
             className={`border p-5 rounded-lg shadow-md border-l-4 ${
-              (evm.sv || 0) >= 0
+              (Number(evm.sv) || 0) >= 0
                 ? 'bg-[#1e293b] border-slate-700 border-l-emerald-500'
                 : 'bg-rose-950/20 border-rose-900 border-l-rose-500'
             }`}
@@ -74,10 +74,10 @@ export const DashboardView = () => {
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Varianza Crono (SV)</p>
             <p
               className={`text-2xl font-black mt-2 ${
-                (evm.sv || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
+                (Number(evm.sv) || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
               }`}
             >
-              ${Math.round(evm.sv || 0).toLocaleString()}
+              ${Math.round(Number(evm.sv) || 0).toLocaleString()}
             </p>
           </div>
         </div>
