@@ -19,7 +19,7 @@ export const GanttCanvas = ({
   minD,
   tlDays = [],
 }) => {
-  const { resources, startDate, statusDate, workingDays, holidays, cpmResult } = useProjectStore();
+  const { tasks, resources, startDate, statusDate, workingDays, holidays, cpmResult } = useProjectStore();
   const { zoom, showLinks } = useUIStore();
 
   const { pSum = {} } = cpmResult;
@@ -48,13 +48,14 @@ export const GanttCanvas = ({
 
   // Barra de resumen global del proyecto
   const globalSummaryBar = useMemo(() => {
-    if (!cpmResult.end || !minTime) return null;
+    if (!tasks || tasks.length === 0 || !cpmResult.end || cpmResult.end === '-' || !minTime) return null;
     const sT = new Date(startDate + 'T00:00:00').getTime();
     const eT = new Date(cpmResult.end + 'T00:00:00').getTime();
+    if (isNaN(sT) || isNaN(eT) || eT <= sT) return null;
     const left = Math.max(0, (sT - minTime) / (1000 * 3600 * 24)) * zoom;
     const width = Math.max(1, (eT - sT) / (1000 * 3600 * 24)) * zoom;
     return { left, width };
-  }, [startDate, cpmResult.end, minTime, zoom]);
+  }, [tasks, startDate, cpmResult.end, minTime, zoom]);
 
   // Pre-calcular grupos de meses del timeline
   const monthGroups = useMemo(() => {

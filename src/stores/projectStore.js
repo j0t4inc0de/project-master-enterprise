@@ -30,17 +30,18 @@ const createSnapshot = (state) => {
 };
 
 const getInitialState = () => {
+  const today = new Date().toISOString().split('T')[0];
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
-        projectName: parsed.projectName || 'Proyecto General',
-        tasks: parsed.tasks || INIT_TASKS,
-        resources: parsed.resources || INIT_RESOURCES,
-        holidays: parsed.holidays || INIT_HOLIDAYS,
-        startDate: parsed.startDate || '2026-06-01',
-        statusDate: parsed.statusDate || '2026-06-15',
+        projectName: parsed.projectName || 'Nuevo Proyecto',
+        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+        resources: Array.isArray(parsed.resources) ? parsed.resources : [],
+        holidays: Array.isArray(parsed.holidays) ? parsed.holidays : [],
+        startDate: parsed.startDate || today,
+        statusDate: parsed.statusDate || today,
         workingDays: parsed.workingDays || INIT_WORKING_DAYS,
       };
     }
@@ -49,12 +50,12 @@ const getInitialState = () => {
   }
 
   return {
-    projectName: 'Proyecto General',
-    tasks: INIT_TASKS,
-    resources: INIT_RESOURCES,
-    holidays: INIT_HOLIDAYS,
-    startDate: '2026-06-01',
-    statusDate: '2026-06-15',
+    projectName: 'Nuevo Proyecto',
+    tasks: [],
+    resources: [],
+    holidays: [],
+    startDate: today,
+    statusDate: today,
     workingDays: INIT_WORKING_DAYS,
   };
 };
@@ -430,9 +431,29 @@ export const useProjectStore = create((set, get) => ({
 
   resetProject: () => {
     localStorage.removeItem(STORAGE_KEY);
+    const today = new Date().toISOString().split('T')[0];
     get().recalc(
       {
         projectName: 'Nuevo Proyecto',
+        tasks: [],
+        resources: [],
+        holidays: [],
+        startDate: today,
+        statusDate: today,
+        workingDays: INIT_WORKING_DAYS,
+        past: [],
+        future: [],
+        canUndo: false,
+        canRedo: false,
+      },
+      false
+    );
+  },
+
+  loadDemoProject: () => {
+    get().recalc(
+      {
+        projectName: 'Construcción Edificio Central',
         tasks: INIT_TASKS,
         resources: INIT_RESOURCES,
         holidays: INIT_HOLIDAYS,
@@ -444,7 +465,7 @@ export const useProjectStore = create((set, get) => ({
         canUndo: false,
         canRedo: false,
       },
-      false
+      true
     );
   },
 }));

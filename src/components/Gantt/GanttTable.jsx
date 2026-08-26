@@ -7,11 +7,13 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
   const {
     resources,
     cpmResult,
+    addTask,
     updateTask,
     insertTask,
     deleteTask,
     indentTask,
     outdentTask,
+    loadDemoProject,
   } = useProjectStore();
 
   const { collapsed, toggleCollapse, autoLink } = useUIStore();
@@ -101,7 +103,39 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
               Σ ${(pSum.cost || 0).toLocaleString()}
             </td>
           </tr>
-          {visibleTasks.map((t) => {
+
+          {visibleTasks.length === 0 ? (
+            <tr>
+              <td colSpan="13" className="text-center py-14 px-4 bg-slate-900/30">
+                <div className="flex flex-col items-center justify-center text-slate-400 gap-2.5">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 text-lg border border-slate-700 shadow-inner">
+                    <i className="fa-solid fa-list-check"></i>
+                  </div>
+                  <div className="text-xs font-bold text-slate-200">El proyecto está en blanco</div>
+                  <div className="text-[11px] text-slate-400 max-w-sm">
+                    Añade una partida principal o sube una planilla Excel (.xlsx) para comenzar a planificar.
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      onClick={() => addTask(autoLink)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all shadow cursor-pointer"
+                    >
+                      <i className="fa-solid fa-plus text-[10px]"></i>
+                      Añadir Primera Partida
+                    </button>
+                    <button
+                      onClick={loadDemoProject}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-3 py-1.5 rounded-md border border-slate-600 flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <i className="fa-solid fa-wand-magic-sparkles text-amber-400 text-[10px]"></i>
+                      Cargar Ejemplo Demo
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            visibleTasks.map((t) => {
             const isMilestone = t.duration === 0 && !t.isP;
             const statusStyle = getTaskStatusStyle(t);
             const isCollapsed = collapsed.includes(t.id);
@@ -362,7 +396,8 @@ export const GanttTable = ({ tableRef, visibleTasks = [] }) => {
                 </td>
               </tr>
             );
-          })}
+          })
+        )}
         </tbody>
       </table>
     </div>
