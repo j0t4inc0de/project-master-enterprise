@@ -117,7 +117,7 @@ export const ProjectsSidebar = () => {
             className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-1.5 px-2.5 rounded-md border border-slate-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <i className="fa-solid fa-folder-open text-amber-400 text-[10px]"></i>
-            <span>Abrir .json</span>
+            <span>Abrir</span>
           </button>
         </div>
 
@@ -313,8 +313,7 @@ export const ProjectsSidebar = () => {
 
         {/* Pie del Sidebar */}
         <div className="p-3 border-t border-slate-700/80 bg-slate-900/90 text-center text-[10px] text-slate-400">
-          <i className="fa-solid fa-hard-drive text-blue-400 mr-1"></i>
-          Almacenamiento Local Seguro
+          Aquí en update futuras se mostrara el perfil del usuario iniciado...
         </div>
       </div>
     </div>

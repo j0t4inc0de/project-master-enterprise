@@ -139,10 +139,6 @@ export const Header = () => {
           </div>
 
           <div className="flex items-center gap-2 text-[9px] text-slate-400 font-medium">
-            <span className="text-emerald-400 flex items-center gap-1 font-bold">
-              <i className="fa-solid fa-cloud-arrow-up text-[8px] animate-pulse"></i>
-              Auto-Guardado Local
-            </span>
             {cpmResult.hasCycle && (
               <>
                 <span className="text-slate-600">•</span>
