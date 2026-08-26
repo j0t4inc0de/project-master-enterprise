@@ -334,8 +334,7 @@ export const ProjectsSidebar = () => {
 
         {/* Pie del Sidebar */}
         <div className="p-3 border-t border-slate-700/80 bg-slate-900/90 text-center text-[10px] text-slate-400">
-          <i className="fa-solid fa-hard-drive text-blue-400 mr-1"></i>
-          Almacenamiento Local Seguro
+          Aqui se mostrara el perfil del usuario iniciado
         </div>
       </div>
     </div>
