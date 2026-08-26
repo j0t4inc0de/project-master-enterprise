@@ -80,11 +80,19 @@ export const Header = () => {
 
   const handleExportPDF = async () => {
     try {
-      const targetId = activeTab === 'dashboard' ? 'dashboard-container' : 'gantt-main-container';
-      const reportName = activeTab === 'dashboard' ? 'Dashboard Ejecutivo' : 'Carta Gantt';
+      const isDashboard = activeTab === 'dashboard';
+      const reportName = isDashboard ? 'Dashboard Ejecutivo' : 'Carta Gantt & Cronograma';
       await exportReportToPDF(
-        targetId,
-        { projectName, startDate, statusDate, cpmResult },
+        {
+          elementId: isDashboard ? 'dashboard-container' : null,
+          isDashboard,
+          projectName,
+          startDate,
+          statusDate,
+          cpmResult,
+          tasks,
+          resources,
+        },
         reportName
       );
     } catch (err) {
