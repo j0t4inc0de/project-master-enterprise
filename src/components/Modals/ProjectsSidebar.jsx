@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
 import { openProjectFromFile } from '../../lib/projectStorage';
@@ -18,7 +18,16 @@ export const ProjectsSidebar = () => {
 
   const { projectsDrawerOpen, setProjectsDrawerOpen } = useUIStore();
 
-  if (!projectsDrawerOpen) return null;
+  // Cerrar con tecla Escape
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && projectsDrawerOpen) {
+        setProjectsDrawerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [projectsDrawerOpen, setProjectsDrawerOpen]);
 
   const currentProjectName = (projectName || 'Nuevo Proyecto').trim().toLowerCase();
   const currentSaved = savedProjects.find(
@@ -73,15 +82,25 @@ export const ProjectsSidebar = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex select-none">
-      {/* Fondo Oscuro con Desenfoque */}
+    <div
+      className={`fixed inset-0 z-50 select-none transition-all duration-300 ${
+        projectsDrawerOpen ? 'pointer-events-auto visible' : 'pointer-events-none invisible'
+      }`}
+    >
+      {/* Fondo Oscuro con Desenfoque y Transición Suave */}
       <div
         onClick={() => setProjectsDrawerOpen(false)}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ease-out ${
+          projectsDrawerOpen ? 'opacity-100' : 'opacity-0'
+        }`}
       ></div>
 
-      {/* Drawer Lateral Izquierdo */}
-      <div className="relative w-84 max-w-[85vw] bg-[#1e293b] border-r border-slate-700 shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-left duration-200 text-slate-200">
+      {/* Drawer Lateral Izquierdo con Animación Fluida */}
+      <div
+        className={`fixed inset-y-0 left-0 w-84 max-w-[85vw] bg-[#1e293b] border-r border-slate-700 shadow-2xl h-full flex flex-col z-50 text-slate-200 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+          projectsDrawerOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         {/* Cabecera del Sidebar */}
         <div className="px-4 py-3.5 border-b border-slate-700 bg-slate-900/90 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -97,7 +116,7 @@ export const ProjectsSidebar = () => {
           <button
             onClick={() => setProjectsDrawerOpen(false)}
             title="Cerrar (Esc)"
-            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <i className="fa-solid fa-xmark text-base"></i>
           </button>
@@ -107,17 +126,17 @@ export const ProjectsSidebar = () => {
         <div className="p-3 border-b border-slate-700/60 bg-slate-900/40 flex items-center gap-2">
           <button
             onClick={handleNew}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-1.5 px-2.5 rounded-md shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-1.5 px-2.5 rounded-md shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
             <i className="fa-solid fa-plus text-[10px]"></i>
             <span>Nuevo</span>
           </button>
           <button
             onClick={handleOpenJson}
-            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-1.5 px-2.5 rounded-md border border-slate-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-1.5 px-2.5 rounded-md border border-slate-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
             <i className="fa-solid fa-folder-open text-amber-400 text-[10px]"></i>
-            <span>Abrir</span>
+            <span>Abrir .json</span>
           </button>
         </div>
 
@@ -140,7 +159,9 @@ export const ProjectsSidebar = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
-                    <span>{tasks.length} {tasks.length === 1 ? 'partida' : 'partidas'}</span>
+                    <span>
+                      {tasks.length} {tasks.length === 1 ? 'partida' : 'partidas'}
+                    </span>
                     <span>•</span>
                     <span className="text-emerald-400 font-medium">
                       ${(cpmResult?.pSum?.cost || 0).toLocaleString()}
@@ -203,7 +224,7 @@ export const ProjectsSidebar = () => {
                       key={p.id}
                       className={`group border rounded-lg p-2 transition-all flex items-center justify-between gap-2 ${
                         isSelected
-                          ? 'bg-blue-950/40 border-blue-500/40'
+                          ? 'bg-blue-950/40 border-blue-500/40 shadow-sm'
                           : 'bg-slate-900/60 border-slate-700/60 hover:bg-slate-800/80 hover:border-slate-600'
                       }`}
                     >
@@ -225,14 +246,14 @@ export const ProjectsSidebar = () => {
                         <button
                           onClick={() => toggleFavoriteProject(p.id)}
                           title="Quitar de favoritos"
-                          className="text-amber-400 hover:text-slate-400 p-1 rounded hover:bg-slate-800 transition-colors"
+                          className="text-amber-400 hover:text-slate-400 p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
                         >
                           <i className="fa-solid fa-star text-xs"></i>
                         </button>
                         <button
                           onClick={() => deleteSavedProject(p.id)}
                           title="Eliminar del historial"
-                          className="text-slate-600 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-slate-600 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                         >
                           <i className="fa-solid fa-trash text-xs"></i>
                         </button>
@@ -269,7 +290,7 @@ export const ProjectsSidebar = () => {
                       key={p.id}
                       className={`group border rounded-lg p-2 transition-all flex items-center justify-between gap-2 ${
                         isSelected
-                          ? 'bg-blue-950/40 border-blue-500/40'
+                          ? 'bg-blue-950/40 border-blue-500/40 shadow-sm'
                           : 'bg-slate-900/50 border-slate-700/60 hover:bg-slate-800/80 hover:border-slate-600'
                       }`}
                     >
@@ -291,14 +312,14 @@ export const ProjectsSidebar = () => {
                         <button
                           onClick={() => toggleFavoriteProject(p.id)}
                           title="Anclar a favoritos"
-                          className="text-slate-600 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition-colors"
+                          className="text-slate-600 hover:text-amber-400 p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
                         >
                           <i className="fa-regular fa-star text-xs"></i>
                         </button>
                         <button
                           onClick={() => deleteSavedProject(p.id)}
                           title="Eliminar del historial"
-                          className="text-slate-600 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-slate-600 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                         >
                           <i className="fa-solid fa-trash text-xs"></i>
                         </button>
@@ -313,7 +334,8 @@ export const ProjectsSidebar = () => {
 
         {/* Pie del Sidebar */}
         <div className="p-3 border-t border-slate-700/80 bg-slate-900/90 text-center text-[10px] text-slate-400">
-          Aquí en update futuras se mostrara el perfil del usuario iniciado...
+          <i className="fa-solid fa-hard-drive text-blue-400 mr-1"></i>
+          Almacenamiento Local Seguro
         </div>
       </div>
     </div>
