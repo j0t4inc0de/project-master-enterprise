@@ -20,6 +20,10 @@ export const Header = () => {
     workingDays,
     loadProjectData,
     resetProject,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useProjectStore();
 
   const { activeTab, setActiveTab } = useUIStore();
@@ -132,8 +136,34 @@ export const Header = () => {
 
       {/* Date Selectors + File Actions + Tab Navigation */}
       <div className="flex items-center gap-3">
-        {/* Project Files Actions (Tarea 5) */}
+        {/* Project Files Actions (Tarea 5) & Historial */}
         <div className="flex items-center bg-[#09090b]/90 p-1 rounded-xl border border-slate-700 shadow-inner gap-1">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            title="Deshacer (Ctrl+Z)"
+            className={`px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 ${
+              canUndo
+                ? 'text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer'
+                : 'text-slate-600 opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <i className="fa-solid fa-rotate-left text-blue-400"></i>
+            <span className="hidden sm:inline">Deshacer</span>
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+            className={`px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 border-r border-slate-700 pr-2 ${
+              canRedo
+                ? 'text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer'
+                : 'text-slate-600 opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <i className="fa-solid fa-rotate-right text-blue-400"></i>
+            <span className="hidden sm:inline">Rehacer</span>
+          </button>
           <button
             onClick={handleNewProject}
             title="Nuevo Proyecto"

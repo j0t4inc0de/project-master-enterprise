@@ -1,6 +1,24 @@
 import ExcelJS from 'exceljs';
 
 /**
+ * Descarga una plantilla de ejemplo para importación
+ */
+export const downloadExampleTemplate = async () => {
+  const exampleTasks = [
+    { id: 1, level: 1, name: '1. Obras Preliminares', duration: 0, startDate: '2026-09-01', predecessors: '', cost: 0, progress: 0 },
+    { id: 2, level: 2, name: 'Instalación de Faenas', duration: 5, startDate: '2026-09-01', predecessors: '', cost: 250000, progress: 0 },
+    { id: 3, level: 2, name: 'Trazado y Niveles', duration: 3, startDate: '2026-09-08', predecessors: '2', cost: 120000, progress: 0 },
+    { id: 4, level: 1, name: '2. Obra Gruesa', duration: 0, startDate: '2026-09-11', predecessors: '', cost: 0, progress: 0 },
+    { id: 5, level: 2, name: 'Excavaciones', duration: 8, startDate: '2026-09-11', predecessors: '3', cost: 450000, progress: 0 },
+  ];
+  const exampleResources = [
+    { id: 1, name: 'Cuadrilla de Carpintería', type: 'Trabajo', unit: 'Hrs', initials: 'CARP', group: 'Mano de Obra', capacity: 100, rate: 12000, costPerUse: 0, accrual: 'Prorrateo' },
+    { id: 2, name: 'Hormigón H25', type: 'Material', unit: 'm3', initials: 'H25', group: 'Materiales', capacity: 100, rate: 78000, costPerUse: 0, accrual: 'Prorrateo' },
+  ];
+  await exportProjectToExcel({ projectName: 'Plantilla_Ejemplo_Obra', tasks: exampleTasks, resources: exampleResources });
+};
+
+/**
  * Exporta el proyecto completo a un archivo Excel (.xlsx) con formato profesional
  */
 export const exportProjectToExcel = async (projectData) => {

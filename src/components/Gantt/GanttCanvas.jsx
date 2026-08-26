@@ -64,7 +64,8 @@ export const GanttCanvas = ({
 
     for (let i = 0; i < tlDays.length; i++) {
       const d = tlDays[i];
-      const m = d.toLocaleString('es-CL', { month: 'short', year: 'numeric' });
+      const rawMonth = d.toLocaleString('es-CL', { month: 'short', year: 'numeric' });
+      const m = rawMonth.replace('.', '').trim();
       if (currentMonth === null) {
         currentMonth = m;
         currentCount = 1;
@@ -161,14 +162,15 @@ export const GanttCanvas = ({
       >
         <div style={{ width: `${totalWidth}px` }} className="flex flex-col h-full">
           {/* Fila de Meses (28px) */}
-          <div className="h-[28px] flex bg-slate-800 border-b border-slate-700 box-border text-[11px] font-bold text-slate-300">
+          <div className="h-[28px] flex bg-slate-800 border-b border-slate-700 box-border text-[11px] font-bold text-slate-300 select-none">
             {monthGroups.map((g, i) => (
               <div
                 key={i}
-                className="border-r border-slate-700 px-2 flex items-center shrink-0 overflow-hidden"
+                className="border-r border-slate-700 px-2 flex items-center shrink-0 overflow-hidden whitespace-nowrap capitalize text-ellipsis"
                 style={{ width: `${g.count * zoom}px` }}
+                title={g.label}
               >
-                {g.label}
+                <span className="truncate">{g.label}</span>
               </div>
             ))}
           </div>
@@ -244,7 +246,7 @@ export const GanttCanvas = ({
             </svg>
           )}
 
-          {/* Capa de Fondo (Rayas de Días No Laborales + Línea de Estado) */}
+          {/* Capa de Fondo (Rayas de Días No Laborales) */}
           <div className="absolute inset-y-0 left-0 flex pointer-events-none w-full h-full z-0">
             {dayItems.map((d, i) => (
               <div
@@ -253,15 +255,18 @@ export const GanttCanvas = ({
                 style={{ width: `${zoom}px` }}
               />
             ))}
+          </div>
 
-            {/* Línea de Fecha de Estado */}
+          {/* Línea de Fecha de Estado e Insignia Flotante (z-30 para flotar por encima de barras y fila de resumen) */}
+          <div
+            className="absolute top-0 bottom-0 border-l-2 border-dashed border-emerald-500 h-full z-30 pointer-events-none"
+            style={{ left: `${statusDatePx}px` }}
+          >
             <div
-              className="absolute top-0 bottom-0 border-l border-dashed border-emerald-500 h-full z-10 pointer-events-none"
-              style={{ left: `${statusDatePx}px` }}
+              className="bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-b shadow-lg shadow-emerald-950/60 absolute top-0 -translate-x-1/2 uppercase tracking-wide whitespace-nowrap pointer-events-auto select-none"
+              title={`Fecha de Estado: ${statusDate}`}
             >
-              <div className="bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-b absolute top-0 -translate-x-1/2 shadow-lg">
-                Estado
-              </div>
+              Estado
             </div>
           </div>
 

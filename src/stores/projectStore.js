@@ -3,6 +3,31 @@ import { INIT_TASKS, INIT_RESOURCES, INIT_HOLIDAYS, INIT_WORKING_DAYS } from '..
 import { computeProjectCPM } from '../lib/cpmEngine.js';
 
 const STORAGE_KEY = 'pme_project_v1';
+const MAX_HISTORY = 20;
+
+const createSnapshot = (state) => {
+  const clone = (data) => {
+    if (typeof structuredClone === 'function') {
+      try {
+        return structuredClone(data);
+      } catch {
+        // fallback
+      }
+    }
+    return JSON.parse(JSON.stringify(data));
+  };
+
+  return {
+    projectName: state.projectName,
+    tasks: clone(state.tasks),
+    resources: clone(state.resources),
+    holidays: clone(state.holidays),
+    startDate: state.startDate,
+    statusDate: state.statusDate,
+    workingDays: clone(state.workingDays),
+    autoProgress: state.autoProgress ?? false,
+  };
+};
 
 const getInitialState = () => {
   try {
@@ -46,6 +71,12 @@ export const useProjectStore = create((set, get) => ({
   workingDays: initial.workingDays,
   autoProgress: false,
 
+  // Historial de Undo / Redo
+  past: [],
+  future: [],
+  canUndo: false,
+  canRedo: false,
+
   // Resultado CPM computado
   cpmResult: computeProjectCPM({
     tasks: initial.tasks,
@@ -58,8 +89,21 @@ export const useProjectStore = create((set, get) => ({
   }),
 
   // Recalcular CPM y persistir
-  recalc: (updates = {}) => {
-    const current = { ...get(), ...updates };
+  recalc: (updates = {}, recordHistory = true) => {
+    const state = get();
+    let past = state.past || [];
+    let future = state.future || [];
+
+    if (recordHistory) {
+      const prevSnapshot = createSnapshot(state);
+      past = [...past, prevSnapshot];
+      if (past.length > MAX_HISTORY) {
+        past = past.slice(past.length - MAX_HISTORY);
+      }
+      future = [];
+    }
+
+    const current = { ...state, ...updates };
     const cpmResult = computeProjectCPM({
       tasks: current.tasks,
       resources: current.resources,
@@ -70,7 +114,14 @@ export const useProjectStore = create((set, get) => ({
       autoProgress: current.autoProgress,
     });
 
-    set({ ...updates, cpmResult });
+    set({
+      ...updates,
+      cpmResult,
+      past,
+      future,
+      canUndo: past.length > 0,
+      canRedo: future.length > 0,
+    });
 
     // Guardado automático local
     try {
@@ -84,6 +135,99 @@ export const useProjectStore = create((set, get) => ({
           startDate: current.startDate,
           statusDate: current.statusDate,
           workingDays: current.workingDays,
+        })
+      );
+    } catch (e) {
+      console.warn('Error al guardar en localStorage:', e);
+    }
+  },
+
+  // Acciones de Undo / Redo
+  undo: () => {
+    const state = get();
+    if (!state.past || state.past.length === 0) return;
+
+    const currentSnapshot = createSnapshot(state);
+    const newPast = [...state.past];
+    const previousSnapshot = newPast.pop();
+    const newFuture = [currentSnapshot, ...(state.future || [])].slice(0, MAX_HISTORY);
+
+    const cpmResult = computeProjectCPM({
+      tasks: previousSnapshot.tasks,
+      resources: previousSnapshot.resources,
+      holidays: previousSnapshot.holidays,
+      startDate: previousSnapshot.startDate,
+      statusDate: previousSnapshot.statusDate,
+      workingDays: previousSnapshot.workingDays,
+      autoProgress: previousSnapshot.autoProgress,
+    });
+
+    set({
+      ...previousSnapshot,
+      cpmResult,
+      past: newPast,
+      future: newFuture,
+      canUndo: newPast.length > 0,
+      canRedo: newFuture.length > 0,
+    });
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          projectName: previousSnapshot.projectName,
+          tasks: previousSnapshot.tasks,
+          resources: previousSnapshot.resources,
+          holidays: previousSnapshot.holidays,
+          startDate: previousSnapshot.startDate,
+          statusDate: previousSnapshot.statusDate,
+          workingDays: previousSnapshot.workingDays,
+        })
+      );
+    } catch (e) {
+      console.warn('Error al guardar en localStorage:', e);
+    }
+  },
+
+  redo: () => {
+    const state = get();
+    if (!state.future || state.future.length === 0) return;
+
+    const currentSnapshot = createSnapshot(state);
+    const newFuture = [...state.future];
+    const nextSnapshot = newFuture.shift();
+    const newPast = [...(state.past || []), currentSnapshot].slice(-MAX_HISTORY);
+
+    const cpmResult = computeProjectCPM({
+      tasks: nextSnapshot.tasks,
+      resources: nextSnapshot.resources,
+      holidays: nextSnapshot.holidays,
+      startDate: nextSnapshot.startDate,
+      statusDate: nextSnapshot.statusDate,
+      workingDays: nextSnapshot.workingDays,
+      autoProgress: nextSnapshot.autoProgress,
+    });
+
+    set({
+      ...nextSnapshot,
+      cpmResult,
+      past: newPast,
+      future: newFuture,
+      canUndo: newPast.length > 0,
+      canRedo: newFuture.length > 0,
+    });
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          projectName: nextSnapshot.projectName,
+          tasks: nextSnapshot.tasks,
+          resources: nextSnapshot.resources,
+          holidays: nextSnapshot.holidays,
+          startDate: nextSnapshot.startDate,
+          statusDate: nextSnapshot.statusDate,
+          workingDays: nextSnapshot.workingDays,
         })
       );
     } catch (e) {
@@ -266,27 +410,41 @@ export const useProjectStore = create((set, get) => ({
 
   // Cargar proyecto completo (desde archivo o template)
   loadProjectData: (projectData) => {
-    get().recalc({
-      projectName: projectData.projectName || 'Proyecto Importado',
-      tasks: projectData.tasks || INIT_TASKS,
-      resources: projectData.resources || INIT_RESOURCES,
-      holidays: projectData.holidays || INIT_HOLIDAYS,
-      startDate: projectData.startDate || '2026-06-01',
-      statusDate: projectData.statusDate || '2026-06-15',
-      workingDays: projectData.workingDays || INIT_WORKING_DAYS,
-    });
+    get().recalc(
+      {
+        projectName: projectData.projectName || 'Proyecto Importado',
+        tasks: projectData.tasks || INIT_TASKS,
+        resources: projectData.resources || INIT_RESOURCES,
+        holidays: projectData.holidays || INIT_HOLIDAYS,
+        startDate: projectData.startDate || '2026-06-01',
+        statusDate: projectData.statusDate || '2026-06-15',
+        workingDays: projectData.workingDays || INIT_WORKING_DAYS,
+        past: [],
+        future: [],
+        canUndo: false,
+        canRedo: false,
+      },
+      false
+    );
   },
 
   resetProject: () => {
     localStorage.removeItem(STORAGE_KEY);
-    get().recalc({
-      projectName: 'Nuevo Proyecto',
-      tasks: INIT_TASKS,
-      resources: INIT_RESOURCES,
-      holidays: INIT_HOLIDAYS,
-      startDate: '2026-06-01',
-      statusDate: '2026-06-15',
-      workingDays: INIT_WORKING_DAYS,
-    });
+    get().recalc(
+      {
+        projectName: 'Nuevo Proyecto',
+        tasks: INIT_TASKS,
+        resources: INIT_RESOURCES,
+        holidays: INIT_HOLIDAYS,
+        startDate: '2026-06-01',
+        statusDate: '2026-06-15',
+        workingDays: INIT_WORKING_DAYS,
+        past: [],
+        future: [],
+        canUndo: false,
+        canRedo: false,
+      },
+      false
+    );
   },
 }));

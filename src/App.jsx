@@ -1,5 +1,6 @@
-import React, { Component } from 'react';
+import React, { Component, useEffect } from 'react';
 import { useUIStore } from './stores/uiStore';
+import { useProjectStore } from './stores/projectStore';
 import { Header } from './components/Header';
 import { GanttView } from './components/Gantt/GanttView';
 import { DashboardView } from './components/Dashboard/DashboardView';
@@ -66,6 +67,43 @@ function MainContent() {
 }
 
 export default function App() {
+  const undo = useProjectStore((state) => state.undo);
+  const redo = useProjectStore((state) => state.redo);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const target = e.target;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (!isCtrlOrCmd) return;
+
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      // Redo: Ctrl+Y / Cmd+Y o Ctrl+Shift+Z / Cmd+Shift+Z
+      if (key === 'y' || (e.shiftKey && key === 'z')) {
+        e.preventDefault();
+        redo();
+      }
+      // Undo: Ctrl+Z / Cmd+Z (sin Shift)
+      else if (!e.shiftKey && key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen w-screen bg-[#0f172a] text-sm overflow-hidden font-sans">

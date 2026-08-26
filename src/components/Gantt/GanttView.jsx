@@ -62,7 +62,7 @@ export const GanttView = () => {
   const { minD, tlDays } = useMemo(() => {
     let s = new Date(startDate + 'T00:00:00');
     if (isNaN(s.getTime())) s = new Date();
-    s.setDate(s.getDate() - 2);
+    s = new Date(s.getFullYear(), s.getMonth(), 1);
 
     let e = new Date((cpmResult.end || startDate) + 'T00:00:00');
     if (isNaN(e.getTime())) e = new Date();

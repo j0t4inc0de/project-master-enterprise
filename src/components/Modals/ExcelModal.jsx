@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
-import { exportProjectToExcel, importTasksFromExcel } from '../../lib/excelHandler';
+import { exportProjectToExcel, importTasksFromExcel, downloadExampleTemplate } from '../../lib/excelHandler';
 
 export const ExcelModal = ({ isOpen, onClose }) => {
   const { projectName, tasks, resources, holidays, startDate, statusDate, workingDays, setTasks, setResources } =
@@ -12,6 +12,19 @@ export const ExcelModal = ({ isOpen, onClose }) => {
   const [importMode, setImportMode] = useState('replace'); // 'replace' | 'append'
 
   if (!isOpen) return null;
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMsg('');
+      await downloadExampleTemplate();
+      setSuccessMsg('¡Plantilla de ejemplo descargada exitosamente!');
+    } catch (err) {
+      setErrorMsg('Error al descargar plantilla: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleExport = async () => {
     try {
@@ -138,14 +151,25 @@ export const ExcelModal = ({ isOpen, onClose }) => {
             <p className="text-xs text-slate-400 mb-3">
               Genera un libro con las hojas <strong>Partidas Gantt</strong> y <strong>Pool de Recursos</strong> formateado con fórmulas y estilos.
             </p>
-            <button
-              onClick={handleExport}
-              disabled={isLoading}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow"
-            >
-              <i className="fa-solid fa-download"></i>
-              {isLoading ? 'Generando...' : 'Descargar Archivo .xlsx'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleExport}
+                disabled={isLoading}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow"
+              >
+                <i className="fa-solid fa-download"></i>
+                {isLoading ? 'Generando...' : 'Descargar Archivo .xlsx'}
+              </button>
+              <button
+                onClick={handleDownloadTemplate}
+                disabled={isLoading}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 font-bold text-xs px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow"
+                title="Descargar una plantilla en blanco con partidas de ejemplo"
+              >
+                <i className="fa-solid fa-file-lines text-amber-400"></i>
+                Plantilla de Ejemplo
+              </button>
+            </div>
           </div>
 
           {/* Opción 2: Importar desde Excel */}
