@@ -30,7 +30,6 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
   // Atajos de teclado para Deshacer (Ctrl+Z) y Rehacer (Ctrl+Y / Ctrl+Shift+Z)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignorar si el foco está en un input o textarea editable
       const target = e.target;
       const isInput =
         target &&
@@ -71,16 +70,16 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
   const zoomPct = Math.round((zoom / 24) * 100);
 
   return (
-    <div className="flex flex-col shrink-0 border-b border-[#334155] bg-[#0f172a] shadow-md z-20 select-none">
-      <div className="px-3 py-1.5 flex flex-wrap items-stretch gap-2.5 overflow-x-auto custom-scrollbar">
+    <div className="w-full flex flex-col shrink-0 border-b border-[#334155] bg-[#0f172a] shadow-md z-20 select-none">
+      <div className="w-full px-2 py-1.5 flex flex-wrap lg:flex-nowrap items-stretch gap-2 overflow-x-auto custom-scrollbar">
         {/* GRUPO 1: EDICIÓN & TAREAS */}
-        <div className="flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
-          <div className="flex items-center gap-2 min-h-[32px]">
+        <div className="flex-1 min-w-[340px] flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 shadow-sm transition-all">
+          <div className="flex items-center justify-center gap-2 min-h-[32px] flex-wrap">
             {/* Botón + Partida */}
             <button
               onClick={() => addTask(autoLink)}
               title="Añadir una nueva partida principal al final del cronograma (+ Partida)"
-              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow-sm shadow-blue-900/40 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow-sm shadow-blue-900/40 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
             >
               <i className="fa-solid fa-circle-plus text-sm"></i>
               <span>+ Partida</span>
@@ -102,7 +101,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
                 }`}
               >
                 <i className="fa-solid fa-arrow-rotate-left"></i>
-                <span className="hidden sm:inline text-[11px]">Deshacer</span>
+                <span className="hidden xl:inline text-[11px]">Deshacer</span>
               </button>
 
               <button
@@ -116,7 +115,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
                 }`}
               >
                 <i className="fa-solid fa-arrow-rotate-right"></i>
-                <span className="hidden sm:inline text-[11px]">Rehacer</span>
+                <span className="hidden xl:inline text-[11px]">Rehacer</span>
               </button>
             </div>
 
@@ -126,7 +125,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             {/* Toggle Auto-Vincular */}
             <label
               title="Auto-Vincular: Conectar automáticamente nuevas tareas con la anterior"
-              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all whitespace-nowrap ${
                 autoLink
                   ? 'bg-blue-950/60 border-blue-500/60 text-blue-300 shadow-inner'
                   : 'bg-slate-900/40 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -145,7 +144,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             {/* Toggle Auto-Progreso */}
             <label
               title="Auto-Progreso: Cálculo automático de avance físico y estado según fecha de corte y CPM"
-              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all ${
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border cursor-pointer transition-all whitespace-nowrap ${
                 autoProgress
                   ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 shadow-inner'
                   : 'bg-slate-900/40 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -162,19 +161,19 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             </label>
           </div>
 
-          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400/90 text-center select-none pt-1 border-t border-slate-700/50 mt-1">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 text-center select-none pt-1 border-t border-slate-700/50 mt-1 w-full">
             Edición & Tareas
           </span>
         </div>
 
         {/* GRUPO 2: NAVEGACIÓN & ESCALA */}
-        <div className="flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
-          <div className="flex items-center gap-2 min-h-[32px]">
+        <div className="flex-1 min-w-[280px] flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 shadow-sm transition-all">
+          <div className="flex items-center justify-center gap-2 min-h-[32px] flex-wrap">
             {/* Botón Ir a Hoy */}
             <button
               onClick={onGoToToday}
               title="Centrar la vista Gantt en la fecha de estado / Hoy"
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600/80 px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600/80 px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
             >
               <i className="fa-solid fa-crosshairs text-sky-400"></i>
               <span>Ir a Hoy</span>
@@ -184,7 +183,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             <button
               onClick={() => setShowLinks(!showLinks)}
               title="Mostrar u ocultar flechas de dependencias entre partidas en el Gantt"
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer ${
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer whitespace-nowrap ${
                 showLinks
                   ? 'bg-blue-600 border-blue-500 text-white shadow-blue-900/40'
                   : 'bg-slate-800 hover:bg-slate-700 border-slate-600/80 text-slate-300 hover:text-white'
@@ -231,16 +230,16 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             </div>
           </div>
 
-          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400/90 text-center select-none pt-1 border-t border-slate-700/50 mt-1">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 text-center select-none pt-1 border-t border-slate-700/50 mt-1 w-full">
             Navegación & Escala
           </span>
         </div>
 
         {/* GRUPO 3: FILTROS */}
-        <div className="flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
-          <div className="flex items-center gap-2 min-h-[32px]">
+        <div className="flex-1 min-w-[260px] flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 shadow-sm transition-all">
+          <div className="flex items-center justify-center gap-2 min-h-[32px] w-full">
             {/* Buscador de partidas */}
-            <div className="relative flex items-center">
+            <div className="relative flex-1 min-w-[120px] flex items-center">
               <i className="fa-solid fa-magnifying-glass absolute left-2.5 text-slate-400 text-[11px] pointer-events-none"></i>
               <input
                 type="text"
@@ -248,7 +247,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 title="Filtrar partidas por nombre en tiempo real"
-                className="bg-slate-900/90 border border-slate-700 focus:border-blue-500 text-slate-200 text-xs rounded-md pl-7 pr-6 py-1 outline-none w-44 shadow-inner transition-colors placeholder:text-slate-500 font-medium"
+                className="w-full bg-slate-900/90 border border-slate-700 focus:border-blue-500 text-slate-200 text-xs rounded-md pl-7 pr-6 py-1 outline-none shadow-inner transition-colors placeholder:text-slate-500 font-medium"
               />
               {searchQuery && (
                 <button
@@ -262,7 +261,7 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             </div>
 
             {/* Selector de Filtro */}
-            <div className="relative flex items-center">
+            <div className="relative flex items-center shrink-0">
               <i className="fa-solid fa-filter absolute left-2.5 text-blue-400 text-[11px] pointer-events-none"></i>
               <select
                 value={taskFilter}
@@ -277,26 +276,26 @@ export const GanttToolbar = ({ onGoToToday, onFitZoom }) => {
             </div>
           </div>
 
-          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400/90 text-center select-none pt-1 border-t border-slate-700/50 mt-1">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 text-center select-none pt-1 border-t border-slate-700/50 mt-1 w-full">
             Filtros
           </span>
         </div>
 
         {/* GRUPO 4: DATOS & REPORTES */}
-        <div className="flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
-          <div className="flex items-center gap-2 min-h-[32px]">
+        <div className="flex-1 min-w-[200px] flex flex-col justify-between bg-[#1e293b]/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 shadow-sm transition-all">
+          <div className="flex items-center justify-center gap-2 min-h-[32px]">
             {/* Botón Excel (Importar/Exportar) */}
             <button
               onClick={() => setExcelModalOpen(true)}
               title="Abrir asistente para Importar o Exportar cronograma a Microsoft Excel (.xlsx)"
-              className="bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 text-emerald-100 hover:text-white border border-emerald-500/40 px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 shadow-sm shadow-emerald-950/40 transition-all active:scale-95 cursor-pointer"
+              className="w-full bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 text-emerald-100 hover:text-white border border-emerald-500/40 px-3 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-emerald-950/40 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
             >
               <i className="fa-solid fa-file-excel text-sm text-emerald-300"></i>
               <span>Excel (Importar/Exportar)</span>
             </button>
           </div>
 
-          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400/90 text-center select-none pt-1 border-t border-slate-700/50 mt-1">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 text-center select-none pt-1 border-t border-slate-700/50 mt-1 w-full">
             Datos & Reportes
           </span>
         </div>
