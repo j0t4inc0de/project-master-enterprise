@@ -27,4 +27,4 @@ dist-ssr
 .documentos
 .env
 .env.local
-
+.agents
