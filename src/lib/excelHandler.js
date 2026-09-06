@@ -219,8 +219,9 @@ const parseDateString = (rawStr, defaultDate = '2026-06-01') => {
 };
 
 /**
- * Importa tareas y recursos desde un archivo Excel cargado por el usuario
- * Soporta hojas 'Partidas Gantt' y 'Pool de Recursos'
+ * Importa tareas y recursos desde un archivo Excel cargado por el usuario.
+ * Soporta hojas 'Partidas Gantt', 'Pool de Recursos' y cualquier planilla
+ * de obra libre con datos en columnas no estándar (Smart Fallback).
  */
 export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01') => {
   const arrayBuffer = await file.arrayBuffer();
@@ -235,74 +236,57 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
   let taskWorksheet = null;
   let resourceWorksheet = null;
 
-  // Búsqueda por nombre de hoja
   for (const ws of workbook.worksheets) {
     const name = ws.name.trim().toLowerCase();
     if (!resourceWorksheet && (name.includes('recurso') || name.includes('resource') || name.includes('pool'))) {
       resourceWorksheet = ws;
-    } else if (!taskWorksheet && (name.includes('partida') || name.includes('gantt') || name.includes('tarea') || name.includes('cronograma') || name.includes('cubica') || name.includes('itemizado'))) {
+    } else if (
+      !taskWorksheet &&
+      (name.includes('partida') || name.includes('gantt') || name.includes('tarea') ||
+        name.includes('cronograma') || name.includes('cubica') || name.includes('itemizado') ||
+        name.includes('presupuesto') || name.includes('programa') || name.includes('obra'))
+    ) {
       taskWorksheet = ws;
     }
   }
 
-  // Si no se encontraron por nombre, asignar hoja principal
+  // Fallback: usar la hoja con más filas si no hubo coincidencia por nombre
   if (!taskWorksheet) {
-    taskWorksheet = workbook.worksheets[0];
+    taskWorksheet = workbook.worksheets.reduce((best, ws) =>
+      ws.rowCount > (best?.rowCount ?? 0) ? ws : best, workbook.worksheets[0]);
   }
   if (!resourceWorksheet && workbook.worksheets.length > 1) {
     for (const ws of workbook.worksheets) {
-      if (ws !== taskWorksheet) {
-        resourceWorksheet = ws;
-        break;
-      }
+      if (ws !== taskWorksheet) { resourceWorksheet = ws; break; }
     }
   }
 
-  // 2. Parsear Recursos si existe la hoja correspondiente
+  // 2. Parsear Recursos
   const parsedResources = [];
   if (resourceWorksheet) {
     const resHeaderMap = {};
-    let headerRowIdx = 1;
+    let headerRowIdx = 0;
 
-    // Buscar fila de encabezados en las primeras 5 filas
-    for (let r = 1; r <= Math.min(5, resourceWorksheet.rowCount); r++) {
+    for (let r = 1; r <= Math.min(20, resourceWorksheet.rowCount); r++) {
       const row = resourceWorksheet.getRow(r);
-      let foundHeaders = 0;
-      row.eachCell((cell, colNumber) => {
+      let found = 0;
+      const tmp = {};
+      row.eachCell((cell, col) => {
         const val = getCellValueAsString(cell).trim().toLowerCase();
-        if (/costo\s*(?:x|por)?\s*uso|costperuse|fijo|costo\s*uso/i.test(val)) {
-          resHeaderMap['costPerUse'] = colNumber;
-          foundHeaders++;
-        } else if (/tarifa|rate|precio|valor|tasa|costo\s*(?:hora|\/hora|\/um|unit|est|\.est)/i.test(val)) {
-          resHeaderMap['rate'] = colNumber;
-          foundHeaders++;
-        } else if (/descrip|nombre|recurso/i.test(val)) {
-          resHeaderMap['name'] = colNumber;
-          foundHeaders++;
-        } else if (/^(id|código|codigo|item|n°|nro)$/i.test(val) || val === 'id') {
-          resHeaderMap['id'] = colNumber;
-          foundHeaders++;
-        } else if (/tipo|type/i.test(val)) {
-          resHeaderMap['type'] = colNumber;
-          foundHeaders++;
-        } else if (/^(u\.?m\.?|um|unidad|unit|medida)$/i.test(val) || /\bu\.?m\.?\b/i.test(val)) {
-          resHeaderMap['unit'] = colNumber;
-          foundHeaders++;
-        } else if (/inici|sigla/i.test(val)) {
-          resHeaderMap['initials'] = colNumber;
-          foundHeaders++;
-        } else if (/grupo|group/i.test(val)) {
-          resHeaderMap['group'] = colNumber;
-          foundHeaders++;
-        } else if (/capacid|max|cap/i.test(val)) {
-          resHeaderMap['capacity'] = colNumber;
-          foundHeaders++;
-        } else if (/acumul|devengo|accrual/i.test(val)) {
-          resHeaderMap['accrual'] = colNumber;
-          foundHeaders++;
-        }
+        if (!val) return;
+        if (/costo\s*(?:x|por)?\s*uso|costperuse|fijo|costo\s*uso/i.test(val)) { tmp['costPerUse'] = col; found++; }
+        else if (/tarifa|rate|precio|tasa|costo\s*(?:hora|\/hora|\/um|unit|est|\.est)/i.test(val)) { tmp['rate'] = col; found++; }
+        else if (/descrip|nombre|recurso|glosa/i.test(val)) { tmp['name'] = col; found++; }
+        else if (/^(id|código|codigo|n°|nro)$/i.test(val)) { tmp['id'] = col; found++; }
+        else if (/tipo|type/i.test(val)) { tmp['type'] = col; found++; }
+        else if (/^(u\.?m\.?|um|unidad|unit|medida)$/i.test(val) || /\bu\.?m\.?\b/i.test(val)) { tmp['unit'] = col; found++; }
+        else if (/inici|sigla/i.test(val)) { tmp['initials'] = col; found++; }
+        else if (/grupo|group/i.test(val)) { tmp['group'] = col; found++; }
+        else if (/capacid|max|cap/i.test(val)) { tmp['capacity'] = col; found++; }
+        else if (/acumul|devengo|accrual/i.test(val)) { tmp['accrual'] = col; found++; }
       });
-      if (foundHeaders >= 2) {
+      if (found >= 2 || (found >= 1 && tmp['name'])) {
+        Object.assign(resHeaderMap, tmp);
         headerRowIdx = r;
         break;
       }
@@ -314,37 +298,25 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
         if (rowNumber <= headerRowIdx) return;
         const rawName = resHeaderMap['name'] ? getCellValueAsString(row.getCell(resHeaderMap['name'])) : '';
         if (!rawName || rawName.trim() === '') return;
-
         const rawId = resHeaderMap['id'] ? getCellValueAsNumber(row.getCell(resHeaderMap['id']), NaN) : NaN;
         const resId = isNaN(rawId) ? currentResId++ : rawId;
         if (resId >= currentResId) currentResId = resId + 1;
-
         const rawType = resHeaderMap['type'] ? getCellValueAsString(row.getCell(resHeaderMap['type'])).trim() : 'Trabajo';
         const type = rawType.toLowerCase().includes('mat') ? 'Material' : rawType.toLowerCase().includes('cost') ? 'Costo' : 'Trabajo';
-
         const unit = resHeaderMap['unit'] ? getCellValueAsString(row.getCell(resHeaderMap['unit'])).trim() : (type === 'Trabajo' ? 'Hrs' : 'Un');
         const initials = resHeaderMap['initials'] ? getCellValueAsString(row.getCell(resHeaderMap['initials'])).trim() : rawName.substring(0, 3).toUpperCase();
         const group = resHeaderMap['group'] ? getCellValueAsString(row.getCell(resHeaderMap['group'])).trim() : 'General';
-
         let capacity = 100;
         if (resHeaderMap['capacity']) {
           const capVal = getCellValueAsNumber(row.getCell(resHeaderMap['capacity']), 100);
-          if (!isNaN(capVal) && capVal > 0) {
-            capacity = capVal <= 1 ? Math.round(capVal * 100) : capVal;
-          }
+          if (!isNaN(capVal) && capVal > 0) capacity = capVal <= 1 ? Math.round(capVal * 100) : capVal;
         }
-
         const rawRate = resHeaderMap['rate'] ? getCellValueAsNumber(row.getCell(resHeaderMap['rate']), 0) : 0;
         const rawCostPerUse = resHeaderMap['costPerUse'] ? getCellValueAsNumber(row.getCell(resHeaderMap['costPerUse']), 0) : 0;
         const accrual = resHeaderMap['accrual'] ? getCellValueAsString(row.getCell(resHeaderMap['accrual'])).trim() : 'Prorrateo';
-
         parsedResources.push({
-          id: resId,
-          name: rawName.trim(),
-          type,
-          unit: unit || 'Hrs',
-          initials: initials || 'REC',
-          group: group || 'General',
+          id: resId, name: rawName.trim(), type,
+          unit: unit || 'Hrs', initials: initials || 'REC', group: group || 'General',
           capacity: isNaN(capacity) ? 100 : capacity,
           rate: isNaN(rawRate) ? 0 : rawRate,
           costPerUse: isNaN(rawCostPerUse) ? 0 : rawCostPerUse,
@@ -355,58 +327,97 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
   }
 
   // 3. Parsear Partidas / Tareas
+  // ─── 3a. Detectar fila de cabecera (hasta fila 20) ───────────────────────
   const headerMap = {};
-  let taskHeaderRowIdx = 1;
+  let taskHeaderRowIdx = 0; // 0 = sin cabecera detectada (modo sin-header)
 
-  for (let r = 1; r <= Math.min(5, taskWorksheet.rowCount); r++) {
+  for (let r = 1; r <= Math.min(20, taskWorksheet.rowCount); r++) {
     const row = taskWorksheet.getRow(r);
-    let foundHeaders = 0;
-    row.eachCell((cell, colNumber) => {
+    let found = 0;
+    const tmp = {};
+    row.eachCell((cell, col) => {
       const val = getCellValueAsString(cell).trim().toLowerCase();
-      if (/descrip|nombre|tarea|partida|actividad/i.test(val)) {
-        headerMap['name'] = colNumber;
-        foundHeaders++;
-      } else if (/^(id|código|codigo|item|n°|nro)$/i.test(val) || val === 'id') {
-        headerMap['id'] = colNumber;
-        foundHeaders++;
-      } else if (/durac|dias|días|plazo/i.test(val)) {
-        headerMap['duration'] = colNumber;
-        foundHeaders++;
+      if (!val) return;
+      // Columna de nombre/descripción — patrón específico para evitar falsos positivos con nombres de partidas (ej. 'Obras Provisionales')
+      if (
+        /^(descrip|nombre|tarea|partida|actividad|glosa|item\s+de|especif)/i.test(val) ||
+        /^(obra|trabajo|obras|trabajos)$/i.test(val)
+      ) {
+        tmp['name'] = col; found++;
+      } else if (/^(id|código|codigo|n°|nro|item)$/i.test(val)) {
+        tmp['id'] = col; found++;
+      } else if (/durac|dias|días|plazo|jornada/i.test(val)) {
+        tmp['duration'] = col; found++;
       } else if (/inici|comienzo|start/i.test(val)) {
-        headerMap['startDate'] = colNumber;
-        foundHeaders++;
+        tmp['startDate'] = col; found++;
       } else if (/pred|depend|vinc/i.test(val)) {
-        headerMap['predecessors'] = colNumber;
-        foundHeaders++;
+        tmp['predecessors'] = col; found++;
       } else if (/nivel|wbs|edt/i.test(val)) {
-        headerMap['level'] = colNumber;
-        foundHeaders++;
+        tmp['level'] = col; found++;
       } else if (/prog|avance|%/i.test(val)) {
-        headerMap['progress'] = colNumber;
-        foundHeaders++;
-      } else if (/cost|presupuesto|monto|total/i.test(val)) {
-        headerMap['cost'] = colNumber;
-        foundHeaders++;
+        tmp['progress'] = col; found++;
+      } else if (/cost|presupuesto|monto|total|precio/i.test(val)) {
+        tmp['cost'] = col; found++;
       } else if (/demora\s*in|pos\.?\s*in|pos\s*in/i.test(val)) {
-        headerMap['startDelay'] = colNumber;
-        foundHeaders++;
+        tmp['startDelay'] = col; found++;
       } else if (/demora\s*fin|pos\.?\s*fin|pos\s*fin/i.test(val)) {
-        headerMap['finishDelay'] = colNumber;
-        foundHeaders++;
+        tmp['finishDelay'] = col; found++;
       } else if (/recurs|resource|responsable/i.test(val)) {
-        headerMap['resource'] = colNumber;
-        foundHeaders++;
+        tmp['resource'] = col; found++;
       } else if (/estado|status/i.test(val)) {
-        headerMap['manualStatus'] = colNumber;
-        foundHeaders++;
+        tmp['manualStatus'] = col; found++;
       }
     });
-    if (foundHeaders >= 2) {
+    // Fila válida: ≥ 2 coincidencias, o ≥ 1 si incluye columna de nombre
+    if (found >= 2 || (found >= 1 && tmp['name'])) {
+      Object.assign(headerMap, tmp);
       taskHeaderRowIdx = r;
       break;
     }
   }
 
+  // ─── 3b. Smart Fallback: sin cabecera → detectar columnas por contenido ──
+  // Planillas de cubicación "en bruto" sin fila de títulos: la primera columna
+  // con texto no-numérico de longitud > 1 es el nombre; la primera columna
+  // numérica adyacente es el costo.
+  if (taskHeaderRowIdx === 0) {
+    for (let r = 1; r <= Math.min(taskWorksheet.rowCount, 30); r++) {
+      const row = taskWorksheet.getRow(r);
+      let nameCol = null;
+      let costCol = null;
+      row.eachCell({ includeEmpty: false }, (cell, col) => {
+        if (nameCol !== null && costCol !== null) return;
+        const raw = cell.value;
+        if (raw === null || raw === undefined) return;
+        const str = getCellValueAsString(cell).trim();
+        if (!str) return;
+        if (typeof raw === 'string' && isNaN(Number(raw)) && raw.length > 1 && nameCol === null) {
+          nameCol = col;
+        }
+        const numVal = getCellValueAsNumber(cell, NaN);
+        if (!isNaN(numVal) && costCol === null && col !== nameCol) {
+          costCol = col;
+        }
+      });
+      if (nameCol !== null) {
+        headerMap['name'] = nameCol;
+        if (costCol !== null) headerMap['cost'] = costCol;
+        // taskHeaderRowIdx permanece en 0 → se procesa desde la primera fila
+        break;
+      }
+    }
+  }
+
+  // Si aún no hay columna de nombre, el archivo no tiene datos útiles
+  if (!headerMap['name']) {
+    throw new Error(
+      'No se pudo detectar la columna de descripción de partidas. ' +
+      'Verifica que el archivo tenga una columna con los nombres de las actividades ' +
+      '(Descripción, Nombre, Partida, Glosa, etc.).'
+    );
+  }
+
+  // ─── 3c. Parsear filas de datos ───────────────────────────────────────────
   const parsedTasks = [];
   const rawIdToNewId = new Map();
   let currentId = 1;
@@ -414,34 +425,48 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
   taskWorksheet.eachRow((row, rowNumber) => {
     if (rowNumber <= taskHeaderRowIdx) return;
 
-    const rawName = headerMap['name'] ? getCellValueAsString(row.getCell(headerMap['name'])) : '';
+    const rawName = getCellValueAsString(row.getCell(headerMap['name']));
     if (!rawName || rawName.trim() === '') return;
 
-    // Detectar nivel por columna explícita o por indentación de espacios / numeración
+    // Detectar fila "padre/grupo" por fórmula SUM en la columna de costo.
+    // Las planillas de cubicación chilenas usan =SUM(...) para totalizar secciones.
+    let isSumRow = false;
+    if (headerMap['cost']) {
+      const v = row.getCell(headerMap['cost']).value;
+      if (v && typeof v === 'object' && typeof v.formula === 'string' &&
+          v.formula.toUpperCase().startsWith('SUM')) {
+        isSumRow = true;
+      }
+    }
+
+    // Detectar nivel por columna explícita o por indentación de espacios
     let level = 1;
     if (headerMap['level']) {
       level = getCellValueAsNumber(row.getCell(headerMap['level']), 1);
+    } else if (isSumRow) {
+      level = 1;
     } else {
       const leadingSpaces = rawName.search(/\S|$/);
       if (leadingSpaces >= 4) level = 3;
       else if (leadingSpaces >= 2) level = 2;
     }
 
-    const rawDuration = headerMap['duration'] ? getCellValueAsNumber(row.getCell(headerMap['duration']), 1) : 1;
+    const rawDuration = headerMap['duration']
+      ? getCellValueAsNumber(row.getCell(headerMap['duration']), isSumRow ? 0 : 1)
+      : (isSumRow ? 0 : 1);
     const rawCost = headerMap['cost'] ? getCellValueAsNumber(row.getCell(headerMap['cost']), 0) : 0;
     const rawProgress = headerMap['progress'] ? getCellValueAsNumber(row.getCell(headerMap['progress']), 0) : 0;
-    const progressVal = rawProgress <= 1 && rawProgress > 0 ? Math.round(rawProgress * 100) : Math.min(100, Math.max(0, rawProgress || 0));
+    const progressVal = rawProgress <= 1 && rawProgress > 0
+      ? Math.round(rawProgress * 100)
+      : Math.min(100, Math.max(0, rawProgress || 0));
 
-    // Fecha de Inicio
     let taskStartDate = defaultStartDate;
     if (headerMap['startDate']) {
-      const cellDateStr = getCellValueAsString(row.getCell(headerMap['startDate']));
-      taskStartDate = parseDateString(cellDateStr, defaultStartDate);
+      taskStartDate = parseDateString(getCellValueAsString(row.getCell(headerMap['startDate'])), defaultStartDate);
     }
 
     const predsVal = headerMap['predecessors'] ? getCellValueAsString(row.getCell(headerMap['predecessors'])).trim() : '';
 
-    // Vincular recurso asignado si existe en parsedResources
     let assignedResourceId = '';
     if (headerMap['resource']) {
       const rawRes = getCellValueAsString(row.getCell(headerMap['resource'])).trim();
@@ -453,28 +478,25 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
             rawRes.toLowerCase().includes(r.initials.toLowerCase()) ||
             rawRes.toLowerCase().includes(r.name.toLowerCase())
         );
-        if (matched) {
-          assignedResourceId = matched.id;
-        } else {
+        if (matched) assignedResourceId = matched.id;
+        else {
           const numericResId = parseInt(rawRes);
           if (!isNaN(numericResId)) assignedResourceId = numericResId;
         }
       }
     }
 
-    const rawStatus = headerMap['manualStatus'] ? getCellValueAsString(row.getCell(headerMap['manualStatus'])).trim() : 'AUTO';
+    const rawStatus = headerMap['manualStatus'] ? getCellValueAsString(row.getCell(headerMap['manualStatus'])) : 'AUTO';
     const manualStatus = ['Completada', 'Con Retraso', 'En Plazo', 'Pendiente'].includes(rawStatus) ? rawStatus : 'AUTO';
 
     const rawId = headerMap['id'] ? getCellValueAsNumber(row.getCell(headerMap['id']), null) : null;
     const assignedId = currentId++;
-    if (rawId !== null) {
-      rawIdToNewId.set(String(rawId), String(assignedId));
-    }
+    if (rawId !== null) rawIdToNewId.set(String(rawId), String(assignedId));
 
     parsedTasks.push({
       id: assignedId,
       name: rawName.trim(),
-      duration: isNaN(rawDuration) ? 1 : Math.max(0, rawDuration),
+      duration: isNaN(rawDuration) ? (isSumRow ? 0 : 1) : Math.max(0, rawDuration),
       startDate: taskStartDate,
       progress: progressVal,
       cost: isNaN(rawCost) ? 0 : rawCost,
@@ -483,6 +505,7 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
       finishDelay: headerMap['finishDelay'] ? getCellValueAsNumber(row.getCell(headerMap['finishDelay']), 0) : 0,
       resourceId: assignedResourceId,
       level: Math.max(1, Math.min(5, level)),
+      isP: isSumRow || (level === 1 && rawDuration === 0),
       manualStart: taskStartDate !== defaultStartDate ? taskStartDate : '',
       manualStatus,
     });
@@ -496,12 +519,11 @@ export const importTasksFromExcel = async (file, defaultStartDate = '2026-06-01'
   if (rawIdToNewId.size > 0) {
     parsedTasks.forEach((t) => {
       if (t.predecessors) {
-        const remapped = String(t.predecessors)
+        t.predecessors = String(t.predecessors)
           .split(',')
           .map((p) => p.trim())
           .map((p) => rawIdToNewId.get(p) || p)
           .join(', ');
-        t.predecessors = remapped;
       }
     });
   }
