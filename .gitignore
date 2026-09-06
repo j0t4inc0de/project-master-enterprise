@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 
 # Private documentation & env
-.documentos
+
 .env
 .env.local
 .agents
